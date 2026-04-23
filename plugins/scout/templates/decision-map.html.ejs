@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scout Decision Map — <%= researchQuestion || 'new research' %></title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --inv-anchor: #181C21;
+    --inv-orange: #FF6B00;
+    --inv-orange-hover: #E55F00;
+    --inv-mandarin: #F2A93B;
+    --inv-link: #1256A0;
+    --inv-interactive: #006BF6;
+    --inv-white: #FFFFFF;
+    --inv-well: #F7F7F8;
+    --inv-alt: #FAFAFA;
+    --inv-stroke: #E6E9EB;
+    --inv-stroke-medium: #D9DCDF;
+    --inv-text: #181C21;
+    --inv-text-sec: #5B616E;
+    --inv-text-tert: #84888E;
+    --inv-text-disabled: #BDBFC2;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; background: var(--inv-well); color: var(--inv-text); line-height: 1.55; padding: 40px 20px 80px; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  .page-header { background: var(--inv-anchor); color: var(--inv-white); padding: 32px 28px; border-radius: 8px; margin-bottom: 24px; position: relative; }
+  .page-header h1 { font-size: 28px; font-weight: 700; margin-bottom: 6px; letter-spacing: -0.01em; }
+  .page-header h1::after { content: ''; display: inline-block; width: 8px; height: 8px; background: var(--inv-orange); border-radius: 50%; margin-left: 8px; vertical-align: middle; transform: translateY(-4px); }
+  .page-header .subtitle { font-size: 14px; color: rgba(255,255,255,0.72); }
+  .page-header code { background: rgba(255,255,255,0.12); padding: 2px 8px; border-radius: 4px; font-size: 12px; font-family: "Inter", monospace; color: var(--inv-white); }
+
+  .intro { background: var(--inv-white); border-radius: 8px; padding: 18px 22px; border: 1px solid var(--inv-stroke); margin-bottom: 20px; font-size: 14px; color: var(--inv-text-sec); }
+  .intro strong { color: var(--inv-text); font-weight: 600; }
+
+  .decision { background: var(--inv-white); border-radius: 8px; padding: 22px 24px; border: 1px solid var(--inv-stroke); margin-bottom: 16px; }
+  .decision-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .decision-badge { background: var(--inv-anchor); color: var(--inv-white); font-weight: 700; font-size: 12px; padding: 3px 9px; border-radius: 4px; letter-spacing: 0.3px; }
+  .decision-title { font-size: 16px; font-weight: 700; color: var(--inv-text); }
+  .decision .about { font-size: 13px; color: var(--inv-text-sec); margin-bottom: 12px; line-height: 1.55; }
+
+  .check-group, .radio-group { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+  @media (max-width: 700px) { .check-group, .radio-group { grid-template-columns: 1fr; } }
+  .check-item, .radio-item { border: 1px solid var(--inv-stroke); border-radius: 6px; padding: 10px 12px; font-size: 13px; color: var(--inv-text); display: flex; align-items: flex-start; gap: 8px; cursor: pointer; transition: all 0.15s; background: var(--inv-white); }
+  .check-item:hover, .radio-item:hover { border-color: var(--inv-anchor); background: var(--inv-alt); }
+  .check-item input, .radio-item input { margin-top: 3px; accent-color: var(--inv-orange); }
+  .check-item.suggested, .radio-item.suggested { border-color: var(--inv-orange); background: #FFF5EC; }
+  .item-body { flex: 1; }
+  .item-label { font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .suggested-pill { background: var(--inv-orange); color: var(--inv-white); font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 9999px; letter-spacing: 0.3px; text-transform: uppercase; }
+  .item-rationale { font-size: 12px; color: var(--inv-text-tert); margin-top: 3px; line-height: 1.5; }
+
+  .add-custom-btn { background: transparent; border: 1px dashed var(--inv-stroke-medium); color: var(--inv-text-sec); padding: 8px 14px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; display: inline-block; margin-top: 4px; font-family: inherit; }
+  .add-custom-btn:hover { border-color: var(--inv-orange); color: var(--inv-orange); }
+  .custom-input-row { display: none; margin-top: 8px; }
+  .custom-input-row.open { display: flex; gap: 8px; }
+  .custom-input-row input[type="text"] { flex: 1; border: 1px solid var(--inv-stroke-medium); border-radius: 6px; padding: 8px 10px; font-size: 13px; font-family: inherit; color: var(--inv-text); }
+  .custom-input-row input[type="text"]:focus { outline: none; border-color: var(--inv-interactive); box-shadow: 0 0 0 3px rgba(0,107,246,0.12); }
+  .custom-input-row button { background: var(--inv-anchor); color: var(--inv-white); border: none; padding: 8px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .custom-input-row button:hover { background: #0F1216; }
+  .custom-chips { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .custom-chip { background: #FFF5EC; color: var(--inv-orange); font-size: 12px; padding: 4px 10px 4px 12px; border-radius: 9999px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(255,107,0,0.2); }
+  .custom-chip .x { cursor: pointer; font-weight: 700; color: var(--inv-orange); opacity: 0.7; }
+  .custom-chip .x:hover { opacity: 1; }
+
+  .text-input { width: 100%; border: 1px solid var(--inv-stroke-medium); border-radius: 6px; padding: 10px 12px; font-family: "Inter", inherit; font-size: 14px; color: var(--inv-text); background: var(--inv-white); line-height: 1.5; }
+  .text-input:focus { outline: none; border-color: var(--inv-interactive); box-shadow: 0 0 0 3px rgba(0,107,246,0.12); }
+  textarea.text-input { min-height: 80px; resize: vertical; font-family: "Inter", inherit; }
+  textarea.research-question-input { min-height: 72px; }
+  select.text-input { appearance: none; background: var(--inv-white) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='%23181C21' d='M6 8L0 0h12z'/></svg>") no-repeat right 12px center; padding-right: 32px; cursor: pointer; }
+  .inline-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .inline-row label { font-size: 12px; color: var(--inv-text-sec); font-weight: 600; }
+  .field-rationale { font-size: 12px; color: var(--inv-text-tert); margin-top: 6px; line-height: 1.5; }
+
+  /* Candidate grid (kept — plan pipeline still produces candidates) */
+  .candidates h2 { font-size: 20px; font-weight: 700; margin-bottom: 6px; color: var(--inv-text); }
+  .candidates .sub { font-size: 13px; color: var(--inv-text-sec); margin-bottom: 16px; }
+  .candidate-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; margin-bottom: 18px; }
+  .candidate { background: var(--inv-white); border-radius: 8px; border: 1px solid var(--inv-stroke); overflow: hidden; display: flex; flex-direction: column; font-size: 13px; }
+  .candidate-thumb { width: 100%; height: 140px; background: var(--inv-well); overflow: hidden; position: relative; }
+  .candidate-thumb img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
+  .candidate-thumb.no-shot { display: flex; align-items: center; justify-content: center; color: var(--inv-text-tert); font-size: 12px; }
+  .candidate-thumb.no-shot::after { content: 'no screenshot'; }
+  .candidate-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+  .candidate-label { font-weight: 600; color: var(--inv-text); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .candidate-url { font-size: 11px; color: var(--inv-link); word-break: break-all; text-decoration: none; }
+  .candidate-url:hover { color: var(--inv-interactive); text-decoration: underline; }
+  .candidate-rationale { font-size: 11px; color: var(--inv-text-sec); margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .candidate-checkbox { padding: 8px 12px; border-top: 1px solid var(--inv-stroke); font-size: 12px; display: flex; align-items: center; gap: 8px; color: var(--inv-text-sec); }
+  .verdict-badge { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .verdict-yes { background: #E6F2EC; color: var(--inv-up); }
+  .verdict-partial { background: #FFF4D6; color: #8C5A00; }
+  .source-chip { font-size: 10px; font-weight: 500; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .source-websearch { background: rgba(18,86,160,0.08); color: var(--inv-link); }
+  .source-listicle { background: #FFF5EC; color: var(--inv-orange); }
+  .source-llm { background: var(--inv-well); color: var(--inv-text-sec); }
+
+  .custom-box { background: var(--inv-white); border: 1px solid var(--inv-stroke); border-radius: 8px; padding: 16px; }
+  .custom-box label { display: block; font-weight: 600; font-size: 13px; margin-bottom: 6px; color: var(--inv-text); }
+  .custom-box textarea { width: 100%; min-height: 60px; border: 1px solid var(--inv-stroke-medium); border-radius: 6px; padding: 10px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; color: var(--inv-text); }
+  .custom-box textarea:focus { outline: none; border-color: var(--inv-interactive); box-shadow: 0 0 0 3px rgba(0,107,246,0.12); }
+
+  .generate-section { position: sticky; bottom: 20px; margin-top: 28px; }
+  .generate-btn { width: 100%; padding: 16px; border-radius: 6px; background: var(--inv-orange); color: var(--inv-white); font-size: 15px; font-weight: 700; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(255,107,0,0.24); font-family: inherit; letter-spacing: 0.2px; }
+  .generate-btn:hover { background: var(--inv-orange-hover); box-shadow: 0 6px 16px rgba(255,107,0,0.32); }
+
+  .output-box { display: none; background: var(--inv-white); border-radius: 8px; border: 1px solid var(--inv-stroke); padding: 20px 24px; margin-top: 24px; }
+  .output-box h3 { font-size: 16px; margin-bottom: 8px; color: var(--inv-text); }
+  .output-box pre { background: var(--inv-anchor); color: #D9DCDF; padding: 16px; border-radius: 6px; font-size: 12px; overflow-x: auto; max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .copy-btn { background: var(--inv-anchor); color: var(--inv-white); border: none; padding: 10px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; margin-top: 10px; font-family: inherit; }
+  .copy-btn:hover { background: #0F1216; }
+  .copy-btn.copied { background: var(--inv-up); }
+
+  .meta-footer { margin-top: 28px; font-size: 12px; color: var(--inv-text-tert); text-align: center; }
+
+  /* Advanced research settings — collapsed by default, v4 */
+  .advanced-details { background: var(--inv-alt); border: 1px solid var(--inv-stroke); border-radius: 8px; padding: 0; margin-bottom: 16px; overflow: hidden; }
+  .advanced-details > summary { cursor: pointer; padding: 14px 20px; font-weight: 600; font-size: 14px; color: var(--inv-text); list-style: none; display: flex; align-items: center; gap: 10px; background: var(--inv-alt); user-select: none; }
+  .advanced-details > summary::-webkit-details-marker { display: none; }
+  .advanced-details > summary::before { content: '▸'; display: inline-block; color: var(--inv-text-sec); font-size: 11px; transition: transform 0.15s; }
+  .advanced-details[open] > summary::before { transform: rotate(90deg); }
+  .advanced-details .advanced-subtitle { font-size: 12px; font-weight: 400; color: var(--inv-text-sec); margin-left: 4px; }
+  .advanced-details .advanced-body { padding: 8px 20px 20px; border-top: 1px solid var(--inv-stroke); background: var(--inv-white); }
+  .advanced-details .adv-group-title { font-size: 13px; font-weight: 700; color: var(--inv-text); margin: 14px 0 4px; }
+  .advanced-details .adv-group-about { font-size: 12px; color: var(--inv-text-sec); margin-bottom: 10px; line-height: 1.5; }
+  .advanced-details .adv-radio-group { display: grid; grid-template-columns: 1fr; gap: 8px; }
+  .advanced-details .adv-radio-item { border: 1px solid var(--inv-stroke); border-radius: 6px; padding: 10px 12px; font-size: 13px; color: var(--inv-text); display: flex; align-items: flex-start; gap: 8px; cursor: pointer; transition: all 0.15s; background: var(--inv-white); }
+  .advanced-details .adv-radio-item:hover { border-color: var(--inv-anchor); background: var(--inv-alt); }
+  .advanced-details .adv-radio-item input { margin-top: 3px; accent-color: var(--inv-orange); }
+  .advanced-details .adv-radio-item.recommended { border-color: var(--inv-orange); background: #FFF5EC; }
+  .advanced-details .item-helper { font-size: 12px; color: var(--inv-text-tert); font-style: italic; margin-top: 4px; line-height: 1.5; }
+
+  /* Reference screenshot uploader (visual decision types only) */
+  .reference-file-btn { display: inline-block; cursor: pointer; }
+  .reference-file-btn-inner { display: inline-block; background: transparent; border: 1px dashed var(--inv-stroke-medium); color: var(--inv-text-sec); padding: 10px 18px; border-radius: 6px; font-size: 13px; font-weight: 600; transition: all 0.15s; }
+  .reference-file-btn:hover .reference-file-btn-inner { border-color: var(--inv-orange); color: var(--inv-orange); }
+  .reference-preview { margin-top: 12px; display: flex; align-items: center; gap: 14px; padding: 10px; border: 1px solid var(--inv-stroke); border-radius: 6px; background: var(--inv-well); }
+  .reference-preview img { width: 120px; height: 80px; object-fit: cover; border-radius: 4px; border: 1px solid var(--inv-stroke); }
+  .reference-preview-meta { flex: 1; font-size: 13px; color: var(--inv-text); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .reference-preview-remove { background: transparent; border: 1px solid var(--inv-stroke-medium); color: var(--inv-text-sec); padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .reference-preview-remove:hover { border-color: var(--inv-down); color: var(--inv-down); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="page-header">
+    <h1>Scout decision map</h1>
+    <div class="subtitle">Most fields are pre-filled based on your decision type. Tick through, adjust what doesn't fit, hit Generate.</div>
+    <div class="subtitle" style="margin-top:8px;">Project: <code><%= projectId %></code> · Decision type: <code><%= decisionType %></code> · Session model: <code><%= sessionModel %></code></div>
+  </div>
+
+  <% if (referenceScreenshotPath) { %>
+    <div style="background:#fffbe6; border:1px solid #facc15; border-radius:8px; padding:10px 14px; margin-bottom:14px; font-size:13px; color:#78350f;">
+      Reference: <strong><%= referenceScreenshotFilename || referenceScreenshotPath %></strong>
+      <a href="file://<%= referenceScreenshotPath %>" target="_blank" rel="noopener" style="margin-left:8px; color:#b45309;">view</a>
+    </div>
+  <% } %>
+
+  <div class="intro">
+    <strong>How this works.</strong> Scout pre-filled most answers based on what you're researching. Tick through, change anything that doesn't fit, and hit "Generate response" at the bottom. Every checkbox group has a "+ add custom" button if none of the suggestions match what you mean. Should take about 2 minutes.
+  </div>
+
+  <!-- ========== RESEARCH QUESTION ========== -->
+  <div class="decision">
+    <div class="decision-header"><span class="decision-badge">01</span><span class="decision-title">What are you researching?</span></div>
+    <div class="about">One sentence describing what you want to learn. Think "what's the question I'm trying to answer by looking at competitors."</div>
+    <textarea class="text-input research-question-input" id="research-question" placeholder="e.g., How do subscription trading platforms structure their homepage to convert visitors into trials?"><%= researchQuestion %></textarea>
+  </div>
+
+  <!-- ========== DECISION TYPE ========== -->
+  <div class="decision">
+    <div class="decision-header"><span class="decision-badge">02</span><span class="decision-title">What decision will you make after this research?</span></div>
+    <div class="about">Why this matters: the decision you're about to make changes what scout looks at. Researching for pricing? It'll focus on tier structure and price anchors. For UX? It'll focus on visual patterns and interactions. You already answered this in chat — double-check and change if off.</div>
+    <div class="radio-group" id="group-decision-type">
+      <% const DT_OPTIONS = [
+        ['positioning', 'Positioning / messaging'],
+        ['pricing', 'Pricing / packaging'],
+        ['feature_roadmap', 'Feature roadmap'],
+        ['launch_messaging', 'Launch / counter-positioning'],
+        ['ux_pattern', 'UX pattern research'],
+        ['gtm', 'Go-to-market / channel'],
+        ['battlecard', 'Sales battlecard'],
+        ['other', 'Other'],
+      ]; %>
+      <% DT_OPTIONS.forEach(function(o) { const sel = o[0] === decisionType; %>
+        <label class="radio-item<%= sel ? ' suggested' : '' %>">
+          <input type="radio" name="decision_type" value="<%= o[0] %>" <%= sel ? 'checked' : '' %>>
+          <div class="item-body"><div class="item-label"><%= o[1] %><% if (sel) { %><span class="suggested-pill">Suggested</span><% } %></div></div>
+        </label>
+      <% }) %>
+    </div>
+
+    <!-- Reference screenshot upload — only shown for visual decision types -->
+    <div class="reference-upload" id="reference-upload" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid var(--inv-stroke);">
+      <div style="font-size:13px; font-weight:700; color:var(--inv-text); margin-bottom:4px;">Visual reference (optional but recommended)</div>
+      <div style="font-size:12px; color:var(--inv-text-sec); margin-bottom:10px; line-height:1.5;">
+        Since this is visual research, scout's vision check works much better when it has an example of what you're looking for. Upload a screenshot — a competitor's page, a Figma mockup, anything that shows the pattern you want to match.
+      </div>
+      <label class="reference-file-btn" for="reference-file">
+        <input type="file" id="reference-file" accept="image/*" style="display:none;">
+        <span class="reference-file-btn-inner">+ Upload reference screenshot</span>
+      </label>
+      <div class="reference-preview" id="reference-preview" style="display:none;">
+        <img id="reference-preview-img" alt="reference preview">
+        <div class="reference-preview-meta">
+          <span id="reference-preview-name"></span>
+          <button type="button" id="reference-preview-remove" class="reference-preview-remove">Remove</button>
+        </div>
+      </div>
+    </div>
+    <% if (referenceScreenshotPath) { %>
+      <div style="margin-top:12px; padding:10px 14px; background:#FFF5EC; border:1px solid rgba(255,107,0,0.24); border-left:4px solid var(--inv-orange); border-radius:6px; font-size:12px; color:var(--inv-text);">
+        Already set from chat: <strong><%= referenceScreenshotFilename || referenceScreenshotPath %></strong>
+        <span style="color:var(--inv-text-sec);"> — uploading a new one here will replace it.</span>
+      </div>
+    <% } %>
+  </div>
+
+  <!-- ========== INCLUSION ========== -->
+  <% function renderCheckGroup(groupKey, defaults, title, num, about) { %>
+    <div class="decision">
+      <div class="decision-header"><span class="decision-badge"><%= num %></span><span class="decision-title"><%= title %></span></div>
+      <div class="about"><%= about %></div>
+      <div class="check-group" id="group-<%= groupKey %>">
+        <% defaults.forEach(function(d, i) { %>
+          <label class="check-item suggested">
+            <input type="checkbox" name="<%= groupKey %>" value="<%= d.value %>" checked>
+            <div class="item-body">
+              <div class="item-label"><%= d.label %><span class="suggested-pill">Suggested</span></div>
+              <% if (d.rationale) { %><div class="item-rationale"><%= d.rationale %></div><% } %>
+            </div>
+          </label>
+        <% }) %>
+      </div>
+      <button type="button" class="add-custom-btn" data-target="<%= groupKey %>">+ add custom</button>
+      <div class="custom-input-row" id="custom-row-<%= groupKey %>">
+        <input type="text" placeholder="Type a custom value and press Enter">
+        <button type="button" data-target="<%= groupKey %>">Add</button>
+      </div>
+      <div class="custom-chips" id="custom-chips-<%= groupKey %>"></div>
+    </div>
+  <% } %>
+
+  <% renderCheckGroup('inclusion', suggest.inclusion_defaults || [], 'Which kind of companies do you want to look at?', '03',
+    'Rules about the COMPANY itself — their business model, who they sell to, what industry they\'re in, their size or maturity. Not about what the pattern looks like (that\'s already in your research question in Q1, and the reference screenshot in Q2 if you uploaded one). Example rules: "subscription SaaS only" · "B2B audience" · "retail investor platforms" · "series A or later." Scout uses this to filter the candidate list before spending time analyzing any of them.') %>
+
+  <% renderCheckGroup('exclusion', suggest.exclusion_defaults || [], 'Which kind of companies should we skip?', '04',
+    'Opposite of above — company-level disqualifiers. Examples: "enterprise sales-led only" (can\'t access the product easily) · "apps-only, no web" (you need web evidence) · "Chinese-market only" (you can\'t read the content). Anything that makes a company technically adjacent but wrong for this research.') %>
+
+  <% renderCheckGroup('dimensions', suggest.dimension_defaults || [], 'What do we want to know about each company?', '05',
+    'Each company in the final report gets analyzed on these fields — they become the columns of a comparison table. For UX research: placement, visual style, interaction behavior. For pricing research: tier structure, price points, anchoring. Pick what matters for your decision.') %>
+
+  <!-- ========== VISUAL EVIDENCE ========== -->
+  <div class="decision">
+    <div class="decision-header"><span class="decision-badge">06</span><span class="decision-title">Which screen sizes should we capture?</span></div>
+    <div class="about">Scout always captures the full scrollable page at the size(s) you pick, then crops the relevant section for the report. Tick both desktop and mobile if you want a side-by-side comparison of the pattern in both contexts.</div>
+    <%
+      // Default: desktop checked, mobile off, unless suggest-scoping pre-filled differently.
+      var veDefault = suggest.visual_evidence_default || 'desktop';
+      var veDefaultSet = {};
+      if (typeof veDefault === 'string') {
+        // Legacy shape support: 'desktop-atf' / 'desktop-full' / 'mobile' / 'none' / 'desktop'.
+        var d = veDefault.toLowerCase();
+        if (d === 'none') veDefaultSet['none'] = true;
+        else if (d === 'mobile') veDefaultSet['mobile'] = true;
+        else veDefaultSet['desktop'] = true;
+      } else if (Array.isArray(veDefault)) {
+        veDefault.forEach(function(v) { veDefaultSet[String(v).toLowerCase()] = true; });
+      }
+      if (!veDefaultSet['desktop'] && !veDefaultSet['mobile'] && !veDefaultSet['none']) veDefaultSet['desktop'] = true;
+      var VE_OPTIONS = [
+        ['desktop', 'Desktop (1440×900)'],
+        ['mobile',  'Mobile (390×844)'],
+        ['none',    'No screenshots'],
+      ];
+    %>
+    <div class="check-group" id="group-visual_evidence">
+      <% VE_OPTIONS.forEach(function(o) { var sel = !!veDefaultSet[o[0]]; %>
+        <label class="check-item<%= sel ? ' suggested' : '' %>">
+          <input type="checkbox" name="visual_evidence" value="<%= o[0] %>" <%= sel ? 'checked' : '' %>>
+          <div class="item-body"><div class="item-label"><%= o[1] %><% if (sel) { %><span class="suggested-pill">Suggested</span><% } %></div></div>
+        </label>
+      <% }) %>
+    </div>
+    <div class="field-rationale">Each extra screen size roughly doubles capture time and a little on token cost.</div>
+    <% if (suggest.visual_evidence_rationale) { %><div class="field-rationale"><%= suggest.visual_evidence_rationale %></div><% } %>
+  </div>
+
+  <!-- ========== TARGET COUNT + MIN VERIFIED ========== -->
+  <div class="decision">
+    <div class="decision-header"><span class="decision-badge">07</span><span class="decision-title">How many companies should end up in the report?</span></div>
+    <div class="about">"Target" is what you're aiming for — more companies means a broader picture but longer runtime. "Minimum" is the safety net: if scout's analysis finds fewer than this many real matches, it'll automatically run another search pass to try to find more (up to 2 extra passes).</div>
+    <div class="inline-row">
+      <label>Target:</label>
+      <select class="text-input" id="target-count" style="width:120px;">
+        <% [15, 20, 30, 40].forEach(function(n) { const sel = n === (suggest.suggested_entity_count || 20); %>
+          <option value="<%= n %>" <%= sel ? 'selected' : '' %>><%= n %></option>
+        <% }) %>
+      </select>
+      <label>Minimum:</label>
+      <input type="number" class="text-input" id="min-verified" style="width:100px;" value="<%= suggest.suggested_min_verified || 15 %>" min="5" max="100">
+    </div>
+    <div class="field-rationale">If scout ends up with fewer than the minimum after all 3 search passes, it'll still ship the report and flag "this pattern is rare" at the top — rather than pretending or failing silently.</div>
+  </div>
+
+  <!-- ========== MOCKUP COUNT ========== -->
+  <div class="decision">
+    <div class="decision-header"><span class="decision-badge">08</span><span class="decision-title">Do you want design mockups at the end?</span></div>
+    <div class="about">After scout analyzes the competitors, it can generate concept mockups showing how the patterns could apply to your product. Each mockup ships as a standalone HTML file with annotations explaining why every design choice was made. Skip this if you just want the research; useful if you're about to brief a designer or present to stakeholders.</div>
+    <div class="radio-group">
+      <% const MC_OPTIONS = [
+        ['none', 'No mockups'],
+        ['1', '1 mockup'],
+        ['3-5', '3-5 mockups'],
+        ['5-7', '5-7 mockups'],
+      ]; %>
+      <% MC_OPTIONS.forEach(function(o) { const sel = o[0] === (suggest.mockup_count_default || 'none'); %>
+        <label class="radio-item<%= sel ? ' suggested' : '' %>">
+          <input type="radio" name="mockup_count" value="<%= o[0] %>" <%= sel ? 'checked' : '' %>>
+          <div class="item-body"><div class="item-label"><%= o[1] %><% if (sel) { %><span class="suggested-pill">Suggested</span><% } %></div></div>
+        </label>
+      <% }) %>
+    </div>
+    <% if (suggest.mockup_count_rationale) { %><div class="field-rationale"><%= suggest.mockup_count_rationale %></div><% } %>
+  </div>
+
+  <!-- ========== SECOND OPINION MODEL ========== -->
+  <div class="decision">
+    <div class="decision-header"><span class="decision-badge">09</span><span class="decision-title">Which Claude should fact-check the final report?</span></div>
+    <div class="about">After scout writes the brief and later the report, a different Claude reads it fresh and flags errors — miscounted percentages, shaky claims, wrong citations. Acts as a built-in peer review. Default is a different model than the one running the main research, so it catches blind spots.</div>
+    <div class="radio-group">
+      <% const SO_OPTIONS = ['sonnet', 'opus', 'haiku', 'codex', 'none']; %>
+      <% SO_OPTIONS.forEach(function(o) { const sel = o === suggestedSecondOpinionModel; %>
+        <label class="radio-item<%= sel ? ' suggested' : '' %>">
+          <input type="radio" name="second_opinion_model" value="<%= o %>" <%= sel ? 'checked' : '' %>>
+          <div class="item-body"><div class="item-label"><%= o %><% if (sel) { %><span class="suggested-pill">Suggested</span><% } %></div></div>
+        </label>
+      <% }) %>
+    </div>
+    <div class="field-rationale">Codex requires an active Codex CLI subscription and a Codex connection in this Claude Code session. Falls back to the suggested Claude model if Codex isn't reachable at review time.</div>
+  </div>
+
+  <!-- ========== FREE-FORM NOTES ========== -->
+  <div class="decision">
+    <div class="decision-header"><span class="decision-badge">10</span><span class="decision-title">Anything else scout should know?</span></div>
+    <div class="about">Optional free text for whatever didn't fit above — specific companies you want included, edge cases to watch for, a deadline, a stakeholder who'll read this, a related research thread. Leave blank if nothing comes to mind.</div>
+    <textarea class="text-input" id="notes" placeholder=""></textarea>
+  </div>
+
+  <!-- ========== CANDIDATE GRID ========== -->
+  <% if (proposedCandidates && proposedCandidates.length) { %>
+  <div class="decision candidates">
+    <h2>Candidate entities</h2>
+    <p class="sub">Claude proposed these based on your research question. Uncheck anything that doesn't fit.</p>
+
+    <div class="candidate-grid" id="candidate-grid">
+      <% proposedCandidates.forEach(function(c) { %>
+        <div class="candidate" data-id="<%= c.id %>">
+          <% if (c.screenshotDataUri) { %>
+            <div class="candidate-thumb"><img src="<%= c.screenshotDataUri %>" alt="<%= c.label %>"></div>
+          <% } else if (c.screenshotPath) { %>
+            <div class="candidate-thumb"><img src="<%= c.screenshotPath %>" alt="<%= c.label %>"></div>
+          <% } else { %>
+            <div class="candidate-thumb no-shot"></div>
+          <% } %>
+          <div class="candidate-body">
+            <div class="candidate-label">
+              <span><%= c.label %></span>
+              <% if (c.verdict) { %><span class="verdict-badge verdict-<%= c.verdict %>"><%= c.verdict %></span><% } %>
+              <% if (c.source) { %><span class="source-chip source-<%= c.source %>"><%= c.source %></span><% } %>
+            </div>
+            <a class="candidate-url" href="<%= c.url %>" target="_blank" rel="noopener"><%= c.url %></a>
+            <% if (c.rationale) { %><div class="candidate-rationale" title="<%= c.rationale %>"><%= c.rationale %></div><% } %>
+          </div>
+          <label class="candidate-checkbox"><input type="checkbox" class="cand-cb" data-id="<%= c.id %>" data-url="<%= c.url %>" data-label="<%= c.label %>" data-category="<%= c.category || '' %>" checked> approve</label>
+        </div>
+      <% }) %>
+    </div>
+
+    <div class="custom-box">
+      <label for="custom-entities">Add your own (one URL per line — label auto-derived from the domain)</label>
+      <textarea id="custom-entities" placeholder="https://example.com&#10;https://other.com"></textarea>
+    </div>
+  </div>
+  <% } %>
+
+  <!-- ========== ADVANCED RESEARCH SETTINGS (v4, collapsed by default) ========== -->
+  <details class="advanced-details">
+    <summary>
+      Advanced research settings
+      <span class="advanced-subtitle">For overriding lens or battlecard defaults — most users never open this.</span>
+    </summary>
+    <div class="advanced-body">
+
+      <div class="adv-group-title">Analytical lens</div>
+      <div class="adv-group-about">Controls how scout synthesizes the patterns. Default is inferred from your decision type. Override only if you want a different frame.</div>
+      <div class="adv-radio-group" id="group-framework-lens">
+        <label class="adv-radio-item recommended">
+          <input type="radio" name="framework_lens_override" value="auto" checked>
+          <div class="item-body">
+            <div class="item-label">Auto — let scout pick (default)</div>
+            <div class="item-helper">We'll use <strong><%= inferredLensLabel %></strong> for this decision type (<%= decisionType %>).</div>
+          </div>
+        </label>
+        <label class="adv-radio-item">
+          <input type="radio" name="framework_lens_override" value="jtbd">
+          <div class="item-body">
+            <div class="item-label">Jobs-to-be-Done</div>
+            <div class="item-helper">Group competitors by the customer job they're hired for (e.g., "save time" / "look more professional" / "collaborate with a team"). Best when researching positioning, messaging, or launch strategy.</div>
+          </div>
+        </label>
+        <label class="adv-radio-item">
+          <input type="radio" name="framework_lens_override" value="kano">
+          <div class="item-body">
+            <div class="item-label">Feature-value (Kano)</div>
+            <div class="item-helper">Classify each competitor's features as hygiene (table stakes, doesn't drive conversion), performance (more is better), or delighter (unexpected, wins users). Best when planning a feature roadmap.</div>
+          </div>
+        </label>
+        <label class="adv-radio-item">
+          <input type="radio" name="framework_lens_override" value="price_anchor">
+          <div class="item-body">
+            <div class="item-label">Price anchoring</div>
+            <div class="item-helper">Focus on how competitors structure tiers, set price anchors, and use badge placement to nudge choice. Best when designing a pricing page.</div>
+          </div>
+        </label>
+        <label class="adv-radio-item">
+          <input type="radio" name="framework_lens_override" value="descriptive">
+          <div class="item-body">
+            <div class="item-label">Descriptive only</div>
+            <div class="item-helper">Neutral frequency analysis — "X% of competitors do Y." No framework. Best when you just want to describe the landscape.</div>
+          </div>
+        </label>
+      </div>
+
+      <div class="adv-group-title" style="margin-top:20px;">Also generate battlecards?</div>
+      <div class="adv-group-about">A 60-second one-pager per verified competitor, useful for sales and PMM enablement. Default is inferred from your decision type.</div>
+      <div class="adv-radio-group" id="group-battlecard-override">
+        <label class="adv-radio-item recommended">
+          <input type="radio" name="battlecard_override" value="auto" checked>
+          <div class="item-body">
+            <div class="item-label">Auto — let scout pick (default)</div>
+            <div class="item-helper">Scout generates battlecards automatically for sales-adjacent decisions (pricing, positioning, GTM, etc.) and skips them for design research. For this decision type, that means: <strong><%= inferredBattlecardEnabled ? 'yes' : 'no' %></strong>.</div>
+          </div>
+        </label>
+        <label class="adv-radio-item">
+          <input type="radio" name="battlecard_override" value="yes">
+          <div class="item-body">
+            <div class="item-label">Yes, generate them</div>
+            <div class="item-helper">Always produce a 60-second one-pager per verified competitor — useful even when the decision isn't sales-adjacent, e.g., if you want to share findings with PMM.</div>
+          </div>
+        </label>
+        <label class="adv-radio-item">
+          <input type="radio" name="battlecard_override" value="no">
+          <div class="item-body">
+            <div class="item-label">No, skip</div>
+            <div class="item-helper">Never generate battlecards for this run. Just the research report.</div>
+          </div>
+        </label>
+      </div>
+    </div>
+  </details>
+
+  <!-- ========== GENERATE ========== -->
+
+  <div class="generate-section">
+    <button class="generate-btn" onclick="generateOutput()">Generate response</button>
+  </div>
+
+  <div class="output-box" id="output-box">
+    <h3>Paste this block back into Claude</h3>
+    <p style="font-size:13px;color:#666;margin-bottom:8px;">Copy exactly as-is.</p>
+    <pre id="output-pre"></pre>
+    <button class="copy-btn" id="copy-btn" onclick="copyOutput()">Copy to clipboard</button>
+  </div>
+
+  <div class="meta-footer">Generated <%= generatedAt %> · schema <code><%= schemaVersion %></code></div>
+</div>
+
+<script>
+const PROJECT_ID = <%- JSON.stringify(projectId) %>;
+const SCHEMA_VERSION = <%- JSON.stringify(schemaVersion) %>;
+
+// --- Custom-input affordances ---
+document.querySelectorAll('.add-custom-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    const target = btn.getAttribute('data-target');
+    const row = document.getElementById('custom-row-' + target);
+    row.classList.add('open');
+    row.querySelector('input').focus();
+  });
+});
+document.querySelectorAll('.custom-input-row').forEach(function(row) {
+  const input = row.querySelector('input[type="text"]');
+  const btn = row.querySelector('button');
+  const target = btn.getAttribute('data-target');
+  function addChip() {
+    const v = (input.value || '').trim();
+    if (!v) return;
+    const chipsWrap = document.getElementById('custom-chips-' + target);
+    const chip = document.createElement('span');
+    chip.className = 'custom-chip';
+    chip.setAttribute('data-group', target);
+    chip.setAttribute('data-value', v);
+    chip.innerHTML = '<span class="val"></span><span class="x">×</span>';
+    chip.querySelector('.val').textContent = v;
+    chip.querySelector('.x').addEventListener('click', function() { chip.remove(); });
+    chipsWrap.appendChild(chip);
+    input.value = '';
+  }
+  btn.addEventListener('click', addChip);
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); addChip(); }
+  });
+});
+
+// --- Reference screenshot upload (visual decision types only) ---
+const VISUAL_DECISION_TYPES = ['ux_pattern', 'positioning', 'launch_messaging'];
+let UPLOADED_REFERENCE = null; // {dataUrl, name, mime, size}
+
+function toggleReferenceUpload() {
+  const dt = document.querySelector('input[name="decision_type"]:checked');
+  const wrap = document.getElementById('reference-upload');
+  if (!wrap) return;
+  wrap.style.display = (dt && VISUAL_DECISION_TYPES.indexOf(dt.value) >= 0) ? 'block' : 'none';
+}
+toggleReferenceUpload();
+document.querySelectorAll('input[name="decision_type"]').forEach(function(el) {
+  el.addEventListener('change', toggleReferenceUpload);
+});
+
+(function() {
+  const fileInput = document.getElementById('reference-file');
+  if (!fileInput) return;
+  const preview = document.getElementById('reference-preview');
+  const previewImg = document.getElementById('reference-preview-img');
+  const previewName = document.getElementById('reference-preview-name');
+  const removeBtn = document.getElementById('reference-preview-remove');
+
+  fileInput.addEventListener('change', function(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      UPLOADED_REFERENCE = {
+        dataUrl: ev.target.result,
+        name: file.name,
+        mime: file.type || 'image/png',
+        size: file.size,
+      };
+      previewImg.src = ev.target.result;
+      previewName.textContent = file.name + ' (' + Math.round(file.size / 1024) + ' KB)';
+      preview.style.display = 'flex';
+    };
+    reader.readAsDataURL(file);
+  });
+  removeBtn.addEventListener('click', function() {
+    UPLOADED_REFERENCE = null;
+    fileInput.value = '';
+    preview.style.display = 'none';
+  });
+})();
+
+function getRadio(name) {
+  const el = document.querySelector('input[name="' + name + '"]:checked');
+  return el ? el.value : '';
+}
+function getCheckedValues(name) {
+  return Array.from(document.querySelectorAll('input[name="' + name + '"]:checked')).map(function(el) { return el.value; });
+}
+function getCustomValues(group) {
+  return Array.from(document.querySelectorAll('.custom-chip[data-group="' + group + '"]')).map(function(c) { return c.getAttribute('data-value'); });
+}
+function fmtList(arr) {
+  return '[' + arr.map(function(s) { return s; }).join(', ') + ']';
+}
+
+function generateOutput() {
+  const lines = [];
+  lines.push('=== SCOUT DECISION MAP v2 ===');
+  lines.push('project_id: ' + PROJECT_ID);
+  lines.push('schema: v2');
+  lines.push('generated_at: ' + new Date().toISOString());
+
+  function block(title, body) {
+    lines.push('');
+    lines.push('--- ' + title + ' ---');
+    if (Array.isArray(body)) { body.forEach(function(l) { lines.push(l); }); }
+    else { lines.push(body); }
+  }
+
+  block('Research question', 'value: ' + ((document.getElementById('research-question').value || '').trim()));
+  block('Decision type', 'value: ' + getRadio('decision_type'));
+
+  ['inclusion', 'exclusion', 'dimensions'].forEach(function(g) {
+    const selected = getCheckedValues(g);
+    const custom = getCustomValues(g);
+    const title = g.charAt(0).toUpperCase() + g.slice(1) + (g === 'dimensions' ? '' : ' criteria');
+    block(g === 'dimensions' ? 'Dimensions' : title, [
+      'selected: ' + fmtList(selected),
+      'custom_added: ' + fmtList(custom),
+    ]);
+  });
+
+  (function() {
+    var ve = getCheckedValues('visual_evidence');
+    // "none" is exclusive — if ticked, it wins.
+    if (ve.indexOf('none') >= 0) ve = ['none'];
+    if (!ve.length) ve = ['desktop']; // parser default
+    block('Visual evidence', 'selected: ' + fmtList(ve));
+  })();
+  block('Target entity count', 'value: ' + (document.getElementById('target-count').value || '20'));
+  block('Minimum verified', 'value: ' + (document.getElementById('min-verified').value || '15'));
+  block('Mockup count', 'value: ' + getRadio('mockup_count'));
+  block('Second-opinion model', 'value: ' + getRadio('second_opinion_model'));
+
+  // Reference screenshot (optional; only visual decision types)
+  if (UPLOADED_REFERENCE) {
+    const b64 = UPLOADED_REFERENCE.dataUrl.split(',')[1] || '';
+    block('Reference screenshot', [
+      'filename: ' + UPLOADED_REFERENCE.name,
+      'mime: ' + UPLOADED_REFERENCE.mime,
+      'size_bytes: ' + UPLOADED_REFERENCE.size,
+      'data_base64: ' + b64,
+    ]);
+  } else {
+    block('Reference screenshot', 'value: (none)');
+  }
+
+  const notes = (document.getElementById('notes').value || '').trim();
+  if (notes) {
+    block('Notes', ['value: |', ...notes.split('\n').map(function(l) { return '  ' + l; })]);
+  } else {
+    block('Notes', 'value: ');
+  }
+
+  // v4: Advanced research settings — always emit the two override blocks so
+  // parsers don't have to sniff for them. 'auto' is the default and means
+  // "infer from decision_type".
+  block('Framework lens override', 'value: ' + (getRadio('framework_lens_override') || 'auto'));
+  block('Battlecards override', 'value: ' + (getRadio('battlecard_override') || 'auto'));
+
+  // Approved candidates
+  lines.push('');
+  lines.push('--- Approved candidates ---');
+  const approved = [];
+  document.querySelectorAll('.cand-cb').forEach(function(cb) {
+    if (cb.checked) {
+      approved.push({
+        id: cb.getAttribute('data-id'),
+        label: cb.getAttribute('data-label'),
+        url: cb.getAttribute('data-url'),
+        category: cb.getAttribute('data-category') || '',
+      });
+    }
+  });
+  approved.forEach(function(c) {
+    lines.push('- id=' + c.id + ' | label=' + c.label + ' | url=' + c.url + ' | category=' + c.category);
+  });
+  if (!approved.length) lines.push('(none)');
+
+  // Custom-added
+  lines.push('');
+  lines.push('--- Custom candidates ---');
+  const customArea = document.getElementById('custom-entities');
+  const customRaw = customArea ? (customArea.value || '') : '';
+  const customLines = customRaw.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+  if (customLines.length) {
+    customLines.forEach(function(u) { lines.push('- url=' + u); });
+  } else {
+    lines.push('(none)');
+  }
+
+  lines.push('');
+  lines.push('=== END SCOUT DECISION MAP v2 ===');
+
+  const out = lines.join('\n');
+  const pre = document.getElementById('output-pre');
+  pre.textContent = out;
+  const box = document.getElementById('output-box');
+  box.style.display = 'block';
+  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Visual-evidence "none" is exclusive — ticking it clears desktop/mobile, and ticking either of those clears "none".
+(function() {
+  var boxes = document.querySelectorAll('input[name="visual_evidence"]');
+  boxes.forEach(function(b) {
+    b.addEventListener('change', function() {
+      if (b.value === 'none' && b.checked) {
+        boxes.forEach(function(x) { if (x !== b) x.checked = false; });
+      } else if (b.value !== 'none' && b.checked) {
+        boxes.forEach(function(x) { if (x.value === 'none') x.checked = false; });
+      }
+    });
+  });
+})();
+
+function copyOutput() {
+  const text = document.getElementById('output-pre').textContent;
+  const btn = document.getElementById('copy-btn');
+  navigator.clipboard.writeText(text).then(function() {
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(function() { btn.textContent = 'Copy to clipboard'; btn.classList.remove('copied'); }, 2000);
+  }).catch(function() {
+    btn.textContent = 'Copy failed — select manually';
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "name": "investing-claude-plugins",
+  "owner": {
+    "name": "Investing.com",
+    "email": "product@investing.com"
+  },
+  "metadata": {
+    "description": "Internal Claude Code plugins for Investing.com product, PMM, and design teams.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "scout",
+      "source": "./plugins/scout",
+      "description": "Deterministic competitive/web-evidence research harness. /scout:plan -> /scout:execute -> /scout:review produces a self-contained research HTML with screenshots, per-entity analysis, and patterns.",
+      "version": "0.1.0",
+      "category": "research",
+      "tags": ["research", "competitive-analysis", "screenshots", "pmm", "product"],
+      "strict": false
+    }
+  ]
+}

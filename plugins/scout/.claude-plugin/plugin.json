@@ -1,0 +1,12 @@
+{
+  "name": "scout",
+  "version": "0.1.0",
+  "description": "Deterministic three-phase research harness: plan -> execute -> review. Turns a research question into a self-contained HTML deliverable with screenshots, per-entity analysis, and cross-entity patterns.",
+  "author": {
+    "name": "Investing.com Product Team",
+    "email": "product@investing.com"
+  },
+  "homepage": "https://github.com/investing-com/investing-claude-plugins",
+  "license": "UNLICENSED",
+  "keywords": ["research", "competitive-analysis", "puppeteer", "screenshots"]
+}

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title><%= concept.title %> — Mockup Concept</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --inv-anchor: #181C21;
+    --inv-orange: #FF6B00;
+    --inv-orange-hover: #E55F00;
+    --inv-link: #1256A0;
+    --inv-interactive: #006BF6;
+    --inv-up: #007C32;
+    --inv-down: #D91400;
+    --inv-white: #FFFFFF;
+    --inv-well: #F7F7F8;
+    --inv-alt: #FAFAFA;
+    --inv-stroke: #E6E9EB;
+    --inv-stroke-medium: #D9DCDF;
+    --inv-text: #181C21;
+    --inv-text-sec: #5B616E;
+    --inv-text-tert: #84888E;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; background: var(--inv-well); color: var(--inv-text); line-height: 1.55; -webkit-font-smoothing: antialiased; }
+
+  .page-header { background: var(--inv-anchor); color: var(--inv-white); padding: 36px 40px; }
+  .page-header h1 { font-size: 28px; font-weight: 700; margin-bottom: 10px; letter-spacing: -0.01em; }
+  .page-header h1::after { content: ''; display: inline-block; width: 8px; height: 8px; background: var(--inv-orange); border-radius: 50%; margin-left: 8px; vertical-align: middle; transform: translateY(-4px); }
+  .hypothesis-callout { background: rgba(255,255,255,0.06); border-left: 3px solid var(--inv-orange); padding: 12px 16px; border-radius: 4px; font-size: 14px; color: rgba(255,255,255,0.92); margin-bottom: 12px; max-width: 900px; line-height: 1.55; }
+  .feasibility { font-size: 13px; color: rgba(255,255,255,0.64); max-width: 900px; line-height: 1.55; }
+  .back-link { display: inline-block; color: rgba(255,255,255,0.64); font-size: 13px; text-decoration: none; margin-bottom: 12px; font-weight: 600; }
+  .back-link:hover { color: var(--inv-white); }
+
+  .main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 28px; padding: 32px 40px 60px; max-width: 1600px; margin: 0 auto; }
+  @media (max-width: 1000px) { .main { grid-template-columns: 1fr; } }
+
+  .canvas-card { background: var(--inv-white); border-radius: 8px; border: 1px solid var(--inv-stroke); overflow: hidden; }
+  .canvas-tabs { display: flex; border-bottom: 1px solid var(--inv-stroke); background: var(--inv-well); }
+  .canvas-tab { flex: 1; padding: 12px 16px; font-size: 12px; font-weight: 700; color: var(--inv-text-sec); background: transparent; border: none; cursor: pointer; border-bottom: 2px solid transparent; text-transform: uppercase; letter-spacing: 0.5px; font-family: inherit; }
+  .canvas-tab.active { color: var(--inv-anchor); border-bottom-color: var(--inv-orange); background: var(--inv-white); }
+  .canvas-panel { padding: 24px; position: relative; min-height: 300px; display: none; }
+  .canvas-panel.active { display: block; }
+  .canvas-panel [data-annotation-number] { position: relative; }
+  .callout { position: absolute; top: -12px; left: -12px; background: var(--inv-orange); color: var(--inv-white); border-radius: 50%; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 6px rgba(24,28,33,0.2); z-index: 2; font-family: inherit; }
+  .callout:hover { background: var(--inv-orange-hover); }
+
+  .sidebar { display: flex; flex-direction: column; gap: 14px; }
+  .sidebar-header { font-size: 11px; font-weight: 700; color: var(--inv-text-sec); text-transform: uppercase; letter-spacing: 0.5px; padding-bottom: 4px; }
+  .decision-card { background: var(--inv-white); border-radius: 8px; border: 1px solid var(--inv-stroke); padding: 16px 18px; scroll-margin-top: 20px; transition: all 0.2s; }
+  .decision-card.flash { border-color: var(--inv-orange); box-shadow: 0 0 0 3px rgba(255,107,0,0.16); }
+  .decision-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .decision-number { background: var(--inv-orange); color: var(--inv-white); border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+  .decision-what { font-size: 14px; font-weight: 700; color: var(--inv-text); line-height: 1.4; }
+  .decision-field { margin-top: 8px; font-size: 13px; line-height: 1.55; }
+  .decision-field-label { font-size: 10px; font-weight: 700; color: var(--inv-text-sec); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+  .decision-field-body { color: var(--inv-text); }
+  .source-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+  .source-chip { background: #FFF5EC; color: var(--inv-orange); font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; border: 1px solid rgba(255,107,0,0.2); text-decoration: none; }
+  a.source-chip:hover { background: var(--inv-orange); color: var(--inv-white); }
+
+  .page-footer { background: var(--inv-anchor); color: rgba(255,255,255,0.48); padding: 20px 40px; font-size: 13px; text-align: center; }
+  .page-footer a { color: rgba(255,255,255,0.72); text-decoration: none; }
+  .page-footer a:hover { color: var(--inv-white); }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <% if (backHref) { %><a href="<%= backHref %>" class="back-link">← Back to research report</a><% } %>
+  <h1><%= concept.title %></h1>
+  <% if (concept.hypothesis) { %><div class="hypothesis-callout"><%= concept.hypothesis %></div><% } %>
+  <% if (concept.feasibility) { %><div class="feasibility"><%= concept.feasibility %></div><% } %>
+</div>
+
+<div class="main">
+  <div>
+    <div class="canvas-card">
+      <div class="canvas-tabs">
+        <button class="canvas-tab active" data-panel="before">Before</button>
+        <button class="canvas-tab" data-panel="after">After</button>
+      </div>
+      <div class="canvas-panel active" id="panel-before">
+        <%- concept.state_before || '<em>No before state provided.</em>' %>
+      </div>
+      <div class="canvas-panel" id="panel-after">
+        <%- concept.state_after || '<em>No after state provided.</em>' %>
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-header">Design Decisions</div>
+    <% (concept.annotations || []).forEach(function(a) { %>
+      <div class="decision-card" id="decision-<%= a.number %>" data-decision-number="<%= a.number %>">
+        <div class="decision-card-head">
+          <div class="decision-number"><%= a.number %></div>
+          <div class="decision-what"><%= a.what %></div>
+        </div>
+        <% if (a.source_entities && a.source_entities.length) { %>
+          <div class="decision-field">
+            <div class="decision-field-label">Source</div>
+            <div class="source-chips">
+              <% a.source_entities.forEach(function(s) { %>
+                <% if (backHref) { %>
+                  <a href="<%= backHref %>#entity-<%= s %>" class="source-chip" target="_blank" rel="noopener"><%= s %></a>
+                <% } else { %>
+                  <span class="source-chip"><%= s %></span>
+                <% } %>
+              <% }) %>
+            </div>
+          </div>
+        <% } %>
+        <% if (a.why_it_works) { %>
+          <div class="decision-field">
+            <div class="decision-field-label">Why it works</div>
+            <div class="decision-field-body"><%= a.why_it_works %></div>
+          </div>
+        <% } %>
+        <% if (a.why_it_fits_here) { %>
+          <div class="decision-field">
+            <div class="decision-field-label">Why it fits here</div>
+            <div class="decision-field-body"><%= a.why_it_fits_here %></div>
+          </div>
+        <% } %>
+      </div>
+    <% }) %>
+  </div>
+</div>
+
+<div class="page-footer">
+  Generated by scout v3 · <%= generatedAt %>
+  <% if (backHref) { %> · <a href="<%= backHref %>">Back to research report</a><% } %>
+</div>
+
+<script>
+(function() {
+  // Tab switching
+  const tabs = document.querySelectorAll('.canvas-tab');
+  const panels = document.querySelectorAll('.canvas-panel');
+  tabs.forEach(function(t) {
+    t.addEventListener('click', function() {
+      tabs.forEach(function(x) { x.classList.remove('active'); });
+      panels.forEach(function(p) { p.classList.remove('active'); });
+      t.classList.add('active');
+      document.getElementById('panel-' + t.getAttribute('data-panel')).classList.add('active');
+    });
+  });
+
+  // Inject numbered callouts into annotated elements of both panels.
+  const annotations = <%- JSON.stringify((concept.annotations || []).map(function(a) { return { number: a.number, anchor: a.element_anchor || null }; })) %>;
+  ['before', 'after'].forEach(function(which) {
+    const panel = document.getElementById('panel-' + which);
+    if (!panel) return;
+    // Prefer data-annotation-number hooks if present.
+    annotations.forEach(function(a) {
+      let el = panel.querySelector('[data-annotation-number="' + a.number + '"]');
+      if (!el && a.anchor) {
+        try { el = panel.querySelector(a.anchor); } catch (_) { el = null; }
+      }
+      if (el) {
+        if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
+        const btn = document.createElement('span');
+        btn.className = 'callout';
+        btn.textContent = a.number;
+        btn.setAttribute('data-scroll-to', 'decision-' + a.number);
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          const target = document.getElementById('decision-' + a.number);
+          if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            target.classList.add('flash');
+            setTimeout(function() { target.classList.remove('flash'); }, 1600);
+          }
+        });
+        el.appendChild(btn);
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title><%= entity.label %> — Battlecard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --inv-anchor: #181C21;
+  --inv-orange: #FF6B00;
+  --inv-white: #FFFFFF;
+  --inv-well: #F7F7F8;
+  --inv-alt: #FAFAFA;
+  --inv-stroke: #E6E9EB;
+  --inv-text: #181C21;
+  --inv-text-sec: #5B616E;
+  --inv-text-tert: #84888E;
+  --inv-up: #007C32;
+  --inv-down: #D91400;
+  --inv-link: #1256A0;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; background: var(--inv-well); color: var(--inv-text); line-height: 1.5; -webkit-font-smoothing: antialiased; padding: 24px; }
+.card { max-width: 1080px; margin: 0 auto; background: var(--inv-white); border: 1px solid var(--inv-stroke); border-radius: 8px; padding: 28px 32px; }
+.bc-head { display: flex; align-items: flex-start; gap: 16px; border-bottom: 1px solid var(--inv-stroke); padding-bottom: 16px; margin-bottom: 20px; }
+.bc-head-main { flex: 1; min-width: 0; }
+.bc-head h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; color: var(--inv-text); }
+.bc-head h1::after { content: ''; display: inline-block; width: 8px; height: 8px; background: var(--inv-orange); border-radius: 50%; margin-left: 8px; vertical-align: middle; transform: translateY(-3px); }
+.bc-chip { display: inline-block; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; background: var(--inv-anchor); color: var(--inv-white); text-transform: uppercase; letter-spacing: 0.4px; margin-top: 8px; }
+.bc-url { display: block; font-size: 13px; color: var(--inv-link); text-decoration: none; margin-top: 6px; word-break: break-all; }
+.bc-url:hover { text-decoration: underline; }
+.bc-print { background: var(--inv-anchor); color: var(--inv-white); border: none; border-radius: 6px; padding: 10px 16px; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer; text-transform: uppercase; letter-spacing: 0.4px; }
+.bc-print:hover { background: var(--inv-orange); }
+
+.bc-body { display: grid; grid-template-columns: 60fr 40fr; gap: 24px; }
+.bc-col h3 { font-size: 12px; font-weight: 700; color: var(--inv-text-sec); text-transform: uppercase; letter-spacing: 0.5px; margin: 14px 0 8px; }
+.bc-col h3:first-child { margin-top: 0; }
+.bc-oneline { font-size: 15px; font-weight: 600; color: var(--inv-text); padding: 12px 14px; background: var(--inv-alt); border-left: 4px solid var(--inv-orange); border-radius: 4px; line-height: 1.55; }
+.bc-thumb { width: 100%; height: 160px; background: var(--inv-well); border: 1px solid var(--inv-stroke); border-radius: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center; color: var(--inv-text-tert); font-size: 12px; }
+.bc-thumb img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
+.bc-list { list-style: none; padding: 0; }
+.bc-list li { position: relative; padding: 6px 0 6px 18px; font-size: 14px; color: var(--inv-text); line-height: 1.5; border-bottom: 1px solid var(--inv-stroke); }
+.bc-list li:last-child { border-bottom: none; }
+.bc-list li::before { content: '·'; position: absolute; left: 6px; top: 4px; font-size: 18px; font-weight: 700; color: var(--inv-orange); line-height: 1; }
+.bc-win-card { background: var(--inv-alt); border: 1px solid var(--inv-stroke); border-radius: 6px; padding: 12px 14px; margin-top: 10px; }
+.bc-win-card .bc-win-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.bc-win-them .bc-win-title { color: var(--inv-down); }
+.bc-win-us .bc-win-title { color: var(--inv-up); }
+.bc-win-card .bc-win-body { font-size: 13px; color: var(--inv-text); line-height: 1.5; }
+
+.bc-foot { margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--inv-stroke); display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--inv-text-tert); font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+.bc-foot a { color: var(--inv-link); text-decoration: none; font-family: inherit; }
+.bc-foot a:hover { text-decoration: underline; }
+
+@media (max-width: 720px) {
+  .bc-body { grid-template-columns: 1fr; }
+}
+
+@media print {
+  @page { size: landscape; margin: 12mm; }
+  body { background: var(--inv-white); padding: 0; }
+  .card { border: none; padding: 0; max-width: none; }
+  .bc-print { display: none; }
+  .bc-head { page-break-inside: avoid; }
+  .bc-body { page-break-inside: avoid; }
+  .bc-col, .bc-win-card { page-break-inside: avoid; }
+  .bc-thumb { height: 120px; }
+}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="bc-head">
+    <div class="bc-head-main">
+      <h1><%= entity.label %></h1>
+      <span class="bc-chip"><%= entity.category || 'uncategorized' %></span>
+      <% if (entity.url) { %><a class="bc-url" href="<%= entity.url %>" target="_blank" rel="noopener"><%= entity.url %></a><% } %>
+    </div>
+    <button class="bc-print" onclick="window.print()">Print</button>
+  </div>
+
+  <div class="bc-body">
+    <div class="bc-col">
+      <% if (screenshot) { %>
+        <div class="bc-thumb"><img src="<%= screenshot %>" alt="<%= entity.label %>"></div>
+      <% } else { %>
+        <div class="bc-thumb">No screenshot</div>
+      <% } %>
+
+      <h3>In one line</h3>
+      <div class="bc-oneline"><%= concept.one_line %></div>
+
+      <h3>Strengths</h3>
+      <ul class="bc-list">
+        <% (concept.strengths || []).forEach(function(s) { %><li><%= s %></li><% }) %>
+      </ul>
+
+      <h3>Weaknesses</h3>
+      <ul class="bc-list">
+        <% (concept.weaknesses || []).forEach(function(w) { %><li><%= w %></li><% }) %>
+      </ul>
+    </div>
+
+    <div class="bc-col">
+      <h3>How to beat them</h3>
+      <ul class="bc-list">
+        <% (concept.how_to_beat || []).forEach(function(h) { %><li><%= h %></li><% }) %>
+      </ul>
+
+      <div class="bc-win-card bc-win-them">
+        <div class="bc-win-title">When they win</div>
+        <div class="bc-win-body"><%= concept.when_they_win %></div>
+      </div>
+      <div class="bc-win-card bc-win-us">
+        <div class="bc-win-title">When we win</div>
+        <div class="bc-win-body"><%= concept.when_we_win %></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bc-foot">
+    <span>
+      Captured <%= capturedAt || '(unknown)' %><% if (contentHash) { %> · sha256:<%= contentHash %>…<% } %>
+    </span>
+    <% if (backHref) { %><a href="<%= backHref %>">← Back to research report</a><% } %>
+  </div>
+</div>
+</body>
+</html>

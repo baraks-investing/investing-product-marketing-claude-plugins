@@ -1,0 +1,26 @@
+# Node dependencies — users run npm install after cloning. Keeping these out of the
+# repo keeps it small (~66MB of Puppeteer binaries vs a few hundred KB of source).
+**/node_modules/
+**/package-lock.json
+/package.json
+
+# Scout run output — deliverables from runs shouldn't live in the plugin repo.
+.agents/
+screenshots/
+screenshots-*/
+analysis/
+analysis-*/
+mockups/
+battlecards/
+research-report.html
+profiling-research-report.html
+*.pdf
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp

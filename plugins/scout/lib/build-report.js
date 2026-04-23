@@ -34,6 +34,106 @@ function safeReadJson(p, fallback) {
   catch (_) { return fallback; }
 }
 
+// Idempotent normalizer that maps the aggregator's drift-shape patterns.json
+// into the template-expected shape. Accepts hybrid inputs (some items already
+// in template shape, others in drift shape). Template-shape inputs round-trip
+// unchanged (shallow-equal key set). Kept internal — only wired through the
+// patternsDoc read in buildReport.
+function normalizePatterns(doc) {
+  if (!doc || typeof doc !== 'object') {
+    return { execStats: [], bestPractices: [], patterns: [], recommendations: [], observations: [] };
+  }
+
+  function prettify(str) {
+    if (str == null) return '';
+    return String(str)
+      .replace(/[_-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  const execStatsIn = Array.isArray(doc.execStats) ? doc.execStats : [];
+  const execStats = execStatsIn.map((it) => {
+    if (!it || typeof it !== 'object') return it;
+    if ('main' in it || 'sub' in it) return it; // template shape
+    if ('value' in it && ('detail' in it || 'description' in it)) {
+      return { label: it.label, main: it.value, sub: it.detail != null ? it.detail : it.description };
+    }
+    return it;
+  });
+
+  const bestPracticesIn = Array.isArray(doc.bestPractices) ? doc.bestPractices : [];
+  const bestPractices = bestPracticesIn.map((it) => {
+    if (!it || typeof it !== 'object') return it;
+    let rule = it.rule;
+    let detail = it.detail;
+    if (rule == null && it.title != null) rule = it.title;
+    if (detail == null && it.description != null) detail = it.description;
+    if (Array.isArray(it.evidence_entities) && it.evidence_entities.length) {
+      const joined = it.evidence_entities.join(', ');
+      const suffix = ` Evidence: ${joined}.`;
+      const body = typeof detail === 'string' ? detail : '';
+      if (!body.includes('Evidence:')) {
+        detail = (body ? body.replace(/\s*$/, '') + ' ' : '') + `Evidence: ${joined}.`;
+      }
+    }
+    return { ...it, rule, detail };
+  });
+
+  const patternsIn = Array.isArray(doc.patterns) ? doc.patterns : [];
+  const patterns = [];
+  patternsIn.forEach((it) => {
+    if (!it || typeof it !== 'object') { patterns.push(it); return; }
+    // Template shape — pass through.
+    if ('title' in it && ('percent' in it || 'count' in it || 'denominator' in it || 'examples' in it || 'description' in it)) {
+      patterns.push(it);
+      return;
+    }
+    // Drift shape — dimension with value_frequency.
+    if ('dimension' in it && it.value_frequency && typeof it.value_frequency === 'object') {
+      const vf = it.value_frequency;
+      const nTotal = Number.isFinite(it.n_total)
+        ? it.n_total
+        : Object.values(vf).reduce((s, v) => s + (Number(v) || 0), 0);
+      let dom = it.dominant_value;
+      if (dom == null) {
+        // Pick highest-frequency key as dominant fallback.
+        let bestK = null, bestV = -Infinity;
+        Object.keys(vf).forEach((k) => { const v = Number(vf[k]) || 0; if (v > bestV) { bestV = v; bestK = k; } });
+        dom = bestK;
+      }
+      const count = Number(vf[dom]) || 0;
+      const percent = nTotal > 0 ? Math.round((count / nTotal) * 100) : 0;
+      patterns.push({
+        title: `${prettify(dom)} (${it.dimension})`,
+        percent,
+        count,
+        denominator: nTotal,
+        description: it.interpretation || '',
+        examples: [],
+      });
+      return;
+    }
+    patterns.push(it);
+  });
+
+  const recommendationsIn = Array.isArray(doc.recommendations) ? doc.recommendations : [];
+  const recommendations = recommendationsIn.map((it) => {
+    if (!it || typeof it !== 'object') return it;
+    if ('body' in it) return it;
+    if ('rationale' in it) return { ...it, body: it.rationale };
+    return it;
+  });
+
+  const observations = Array.isArray(doc.observations)
+    ? doc.observations
+    : (Array.isArray(doc.top_level_observations) ? doc.top_level_observations : []);
+
+  // Preserve any extra keys (jobs, feature_classification, price_clusters, etc.).
+  return { ...doc, execStats, bestPractices, patterns, recommendations, observations };
+}
+
 function fileToDataUri(filePath) {
   if (!filePath || !fs.existsSync(filePath)) return null;
   const buf = fs.readFileSync(filePath);
@@ -85,7 +185,7 @@ async function buildReport(config) {
   const brief = safeReadJson(briefPath, null);
   if (!brief) throw new Error('brief.json not readable at ' + briefPath);
   const entityData = safeReadJson(entityDataPath, {});
-  const patternsDoc = safeReadJson(patternsPath, { patterns: [], recommendations: [], observations: [] });
+  const patternsDoc = normalizePatterns(safeReadJson(patternsPath, { patterns: [], recommendations: [], observations: [] }));
   const capMeta = safeReadJson(captureMetadataPath, { results: [] });
   const verdictsList = verdictsPath ? safeReadJson(verdictsPath, []) : [];
   const failedList = failedCandidatesPath ? safeReadJson(failedCandidatesPath, []) : [];
@@ -334,7 +434,7 @@ async function runCli() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { buildReport };
+module.exports = { buildReport, normalizePatterns };
 
 if (require.main === module) {
   runCli().catch((e) => { console.error(e); process.exit(1); });

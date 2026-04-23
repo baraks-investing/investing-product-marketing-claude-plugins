@@ -77,7 +77,52 @@ async function dismissCookies(page, selectors) {
   return false;
 }
 
-async function captureOne(browser, entity, opts) {
+// Pure filter helper used by --resume. Given a list of urls, the prior
+// capture-metadata, and a predicate for "does the on-disk file still exist",
+// returns {toCapture, skipped} partitioned by whether the entity already has
+// a successful capture on record.
+function filterUrlsByResume(urls, metadata, existsFn) {
+  const results = (metadata && Array.isArray(metadata.results)) ? metadata.results : [];
+  const skipSet = new Set();
+  const skippedEntries = [];
+  results.forEach((r) => {
+    if (!r || r.status !== 'success' || !r.id) return;
+    if (typeof existsFn === 'function' && r.file && !existsFn(r.file)) return;
+    skipSet.add(r.id);
+    skippedEntries.push(r);
+  });
+  const toCapture = [];
+  (urls || []).forEach((u) => {
+    const id = u.id || slugify(u.label || u.url);
+    if (skipSet.has(id)) return;
+    toCapture.push(u);
+  });
+  return { toCapture, skipped: skippedEntries, skipIds: skipSet };
+}
+
+// Retry seam: wrapper around browser.newPage() that relaunches the browser
+// once if the CDP connection to Chromium has dropped. Puppeteer surfaces this
+// as "Protocol error: Connection closed", "Target closed", or similar —
+// typically when the renderer crashes mid-run. Non-CDP errors are rethrown as
+// is (so timeouts/DNS/etc. still fall through to the normal error path).
+function isCdpDisconnectError(err) {
+  const msg = err && err.message ? String(err.message) : String(err || '');
+  return /Protocol error|Connection closed|Target closed/i.test(msg);
+}
+
+async function newPageWithCdpRetry(browserHolder, launchBrowser) {
+  try {
+    return await browserHolder.current.newPage();
+  } catch (err) {
+    if (!isCdpDisconnectError(err)) throw err;
+    // Relaunch once.
+    try { await browserHolder.current.close(); } catch (_) { /* ignore */ }
+    browserHolder.current = await launchBrowser();
+    return await browserHolder.current.newPage();
+  }
+}
+
+async function captureOne(browser, entity, opts, seam) {
   const { outputDir, jpegQuality, viewport, cookieSelectors, timeoutMs, pageLoadWaitMs, fullPage, flat } = opts;
   const start = Date.now();
 
@@ -87,7 +132,31 @@ async function captureOne(browser, entity, opts) {
   if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
   const filePath = path.join(targetDir, `${id}.jpg`);
 
-  const page = await browser.newPage();
+  // CDP retry seam: if a launcher + holder was passed, route newPage through
+  // the retry wrapper so a crashed browser can relaunch once. Otherwise fall
+  // back to the plain browser.newPage() (keeps existing callers working).
+  let page;
+  if (seam && seam.browserHolder && typeof seam.launchBrowser === 'function') {
+    try {
+      page = await newPageWithCdpRetry(seam.browserHolder, seam.launchBrowser);
+    } catch (err) {
+      return {
+        id,
+        label: entity.label || id,
+        category,
+        url: entity.url,
+        status: 'error',
+        file: null,
+        fileSize: 0,
+        fileSizeKB: 0,
+        error: err && err.message ? err.message : String(err),
+        durationSec: +((Date.now() - start) / 1000).toFixed(2),
+        timestamp: new Date().toISOString(),
+      };
+    }
+  } else {
+    page = await browser.newPage();
+  }
   try {
     await page.setUserAgent(DEFAULT_UA);
     await page.setViewport(viewport);
@@ -151,7 +220,9 @@ async function capture(config = {}) {
   const preset = MODE_PRESETS[mode];
   const viewport = config.viewport || { width: preset.width, height: preset.height };
   const jpegQuality = Number.isFinite(config.jpegQuality) ? config.jpegQuality : 80;
-  const concurrency = Math.max(1, Math.min(8, config.concurrency || (mode === 'thumbnail' ? 4 : 2)));
+  // full-mode default concurrency lowered to 1 to reduce CDP pressure on the
+  // single Chromium instance; crashes observed at 2 parallel full-page shots.
+  const concurrency = Math.max(1, Math.min(8, config.concurrency || (mode === 'thumbnail' ? 4 : 1)));
   const retries = Number.isFinite(config.retries) ? config.retries : 1;
   const cookieSelectors = [...(config.cookieSelectors || []), ...DEFAULT_COOKIE_SELECTORS];
   const outputDir = config.outputDir || path.resolve(process.cwd(), mode === 'thumbnail' ? '.agents/scout/thumbs' : 'screenshots');
@@ -165,16 +236,52 @@ async function capture(config = {}) {
 
   if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
-  const urls = Array.isArray(config.urls) ? config.urls : [];
-  if (!urls.length) {
-    return { results: [], successes: 0, failures: 0, totalDurationSec: 0, viewport, jpegQuality };
+  let urls = Array.isArray(config.urls) ? config.urls : [];
+
+  // --resume: load any pre-existing metadata file and skip ids that already
+  // have a successful capture with the on-disk file still present. Preserved
+  // successes are merged into the final results at the end.
+  const resume = Boolean(config.resume);
+  let preservedResults = [];
+  if (resume && config.metadataPath && fs.existsSync(config.metadataPath)) {
+    try {
+      const prior = JSON.parse(fs.readFileSync(config.metadataPath, 'utf8'));
+      const { toCapture, skipped } = filterUrlsByResume(urls, prior, fs.existsSync);
+      preservedResults = skipped;
+      urls = toCapture;
+    } catch (_) { /* malformed prior metadata — ignore and capture everything */ }
   }
 
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    defaultViewport: viewport,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-  });
+  if (!urls.length) {
+    // Nothing new to capture — still write merged metadata if resume preserved rows.
+    const metaOut = {
+      capturedAt: new Date().toISOString(),
+      mode, viewport, jpegQuality, concurrency,
+      retries: Number.isFinite(config.retries) ? config.retries : 1,
+      totalEntities: preservedResults.length,
+      successes: preservedResults.length,
+      failures: 0,
+      totalDurationSec: 0,
+      results: preservedResults,
+    };
+    if (config.metadataPath && preservedResults.length) {
+      fs.mkdirSync(path.dirname(config.metadataPath), { recursive: true });
+      fs.writeFileSync(config.metadataPath, JSON.stringify(metaOut, null, 2));
+    }
+    return preservedResults.length
+      ? metaOut
+      : { results: [], successes: 0, failures: 0, totalDurationSec: 0, viewport, jpegQuality };
+  }
+
+  async function launchBrowser() {
+    return puppeteer.launch({
+      headless: 'new',
+      defaultViewport: viewport,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    });
+  }
+
+  const browserHolder = { current: await launchBrowser() };
 
   const totalStart = Date.now();
   const results = new Array(urls.length);
@@ -182,19 +289,21 @@ async function capture(config = {}) {
   let successes = 0;
   let failures = 0;
 
+  const seam = { browserHolder, launchBrowser };
+
   async function worker() {
     while (true) {
       const i = cursor++;
       if (i >= urls.length) return;
       const entity = urls[i];
-      let result = await captureOne(browser, entity, {
+      let result = await captureOne(browserHolder.current, entity, {
         outputDir, jpegQuality, viewport, cookieSelectors, timeoutMs, pageLoadWaitMs, fullPage, flat,
-      });
+      }, seam);
       for (let attempt = 0; attempt < retries && result.status === 'error'; attempt++) {
         await new Promise((r) => setTimeout(r, 2500));
-        result = await captureOne(browser, entity, {
+        result = await captureOne(browserHolder.current, entity, {
           outputDir, jpegQuality, viewport, cookieSelectors, timeoutMs, pageLoadWaitMs, fullPage, flat,
-        });
+        }, seam);
       }
       if (result.status === 'success') successes++; else failures++;
       results[i] = result;
@@ -207,9 +316,20 @@ async function capture(config = {}) {
 
   const workers = Array.from({ length: Math.min(concurrency, urls.length) }, () => worker());
   await Promise.all(workers);
-  await browser.close();
+  try { await browserHolder.current.close(); } catch (_) { /* ignore */ }
 
   const totalDurationSec = +((Date.now() - totalStart) / 1000).toFixed(2);
+
+  // Merge any preserved successes (from --resume) with newly captured results.
+  // New results win on id collision (unlikely — filterUrlsByResume excluded them).
+  let mergedResults = results;
+  let mergedSuccesses = successes;
+  if (preservedResults.length) {
+    const newIds = new Set(results.map((r) => r && r.id).filter(Boolean));
+    const preserved = preservedResults.filter((r) => !newIds.has(r.id));
+    mergedResults = preserved.concat(results);
+    mergedSuccesses = successes + preserved.length;
+  }
 
   const metadata = {
     capturedAt: new Date().toISOString(),
@@ -218,11 +338,11 @@ async function capture(config = {}) {
     jpegQuality,
     concurrency,
     retries,
-    totalEntities: urls.length,
-    successes,
+    totalEntities: mergedResults.length,
+    successes: mergedSuccesses,
     failures,
     totalDurationSec,
-    results,
+    results: mergedResults,
   };
 
   if (config.metadataPath) {
@@ -257,9 +377,12 @@ async function runCli() {
     return;
   }
 
+  const resumeFlag = args.includes('--resume');
+
   const configPath = getArg('--config');
   if (configPath) {
     const cfg = JSON.parse(fs.readFileSync(path.resolve(configPath), 'utf8'));
+    if (resumeFlag) cfg.resume = true;
     const result = await capture(cfg);
     console.log(JSON.stringify({ successes: result.successes, failures: result.failures, totalDurationSec: result.totalDurationSec }, null, 2));
     return;
@@ -282,7 +405,16 @@ async function runCli() {
   process.exit(1);
 }
 
-module.exports = { capture, slugify, DEFAULT_COOKIE_SELECTORS, MODE_PRESETS };
+module.exports = {
+  capture,
+  captureOne,
+  slugify,
+  DEFAULT_COOKIE_SELECTORS,
+  MODE_PRESETS,
+  filterUrlsByResume,
+  newPageWithCdpRetry,
+  isCdpDisconnectError,
+};
 
 if (require.main === module) {
   runCli().catch((err) => { console.error(err); process.exit(1); });

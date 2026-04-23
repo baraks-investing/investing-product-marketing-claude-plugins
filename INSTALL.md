@@ -13,21 +13,21 @@ There are two paths depending on where you are:
 
 The plugin currently lives as a local folder on Barak's machine at:
 ```
-C:\Users\barak.s\Desktop\Claude code projects\investing-claude-plugins\
+C:\Users\barak.s\Desktop\Claude code projects\investing-product-marketing-claude-plugins\
 ```
 
 For other employees to use it, you have 3 options. Pick one.
 
 ### Option A — Push to an internal GitHub repo (recommended)
 
-1. Create a new repo on Investing.com's GitHub organisation: `investing-claude-plugins` (or similar name).
+1. Create a new repo on Investing.com's GitHub organisation: `investing-product-marketing-claude-plugins` (or similar name).
 2. From the current local folder, push everything:
    ```bash
-   cd "C:\Users\barak.s\Desktop\Claude code projects\investing-claude-plugins"
+   cd "C:\Users\barak.s\Desktop\Claude code projects\investing-product-marketing-claude-plugins"
    git init
    git add .
    git commit -m "Initial scout plugin"
-   git remote add origin https://github.com/<investing-org>/investing-claude-plugins.git
+   git remote add origin https://github.com/<investing-org>/investing-product-marketing-claude-plugins.git
    git push -u origin main
    ```
 3. In the repo's README, paste the [Install for users](#install-for-users) section below so employees know how to use it.
@@ -39,7 +39,7 @@ Same steps as Option A but create the repo under a personal/company public GitHu
 
 ### Option C — Shared network drive
 
-If GitHub isn't an option, copy the `investing-claude-plugins` folder to a shared drive (Dropbox / OneDrive / Google Drive / a company NAS). Employees clone the folder to their local machine and follow the "local folder install" instructions below.
+If GitHub isn't an option, copy the `investing-product-marketing-claude-plugins` folder to a shared drive (Dropbox / OneDrive / Google Drive / a company NAS). Employees clone the folder to their local machine and follow the "local folder install" instructions below.
 
 ### What NOT to commit to the shared repo
 
@@ -76,19 +76,19 @@ These are the instructions you paste in your company chat/wiki for everyone else
 1. **Clone the repo** (replace the URL with whatever the admin shared):
    ```bash
    cd <your-projects-folder>
-   git clone https://github.com/<investing-org>/investing-claude-plugins.git
+   git clone https://github.com/<investing-org>/investing-product-marketing-claude-plugins.git
    ```
 
 2. **Install the plugin's dependencies** (puppeteer, ejs, sharp):
    ```bash
-   cd investing-claude-plugins/plugins/scout
+   cd investing-product-marketing-claude-plugins/plugins/scout
    npm install
    ```
    This downloads ~130MB of Puppeteer's Chrome binary. Takes 1-2 minutes the first time.
 
 3. **Register the plugin with Claude Code.** Open Claude Code and run:
    ```
-   /plugin marketplace add "C:\path\to\investing-claude-plugins"
+   /plugin marketplace add "C:\path\to\investing-product-marketing-claude-plugins"
    ```
    Replace the path with the absolute path to the folder you just cloned.
 
@@ -124,7 +124,7 @@ Open the HTML in your browser. That's the deliverable.
 
 When the admin pushes a new version:
 ```bash
-cd <your-projects-folder>/investing-claude-plugins
+cd <your-projects-folder>/investing-product-marketing-claude-plugins
 git pull
 cd plugins/scout
 npm install
@@ -148,7 +148,7 @@ Then in Claude Code: `/reload-plugins`
 - Scout uses Codex as an optional 6th seed source and for second-opinion review. If you don't have Codex CLI installed and subscribed, scout silently skips it. No action needed.
 
 **Path with spaces not working:**
-- Wrap paths in double quotes: `/plugin marketplace add "C:\path with spaces\investing-claude-plugins"`
+- Wrap paths in double quotes: `/plugin marketplace add "C:\path with spaces\investing-product-marketing-claude-plugins"`
 
 ### Running a specific research type
 

@@ -11,6 +11,7 @@
  *   - filterUrlsByResume: skips successful ids with on-disk files intact
  *   - newPageWithCdpRetry: succeeds on second attempt after CDP disconnect
  *   - newPageWithCdpRetry: gives up after 1 retry, surfaces original error
+ *   - build-report mockups accepts both array and {count, items} shapes
  *
  * Run: node lib/__tests__/scout-v5-reliability.test.js
  */
@@ -222,6 +223,44 @@ function tmpDir(tag) {
     assert.ok(/Protocol error|Connection closed/i.test(caught.message));
     assert.strictEqual(newPageCalls, 2, 'exactly one retry after the initial failure');
     assert.strictEqual(launcherCalls, 1, 'relaunch called exactly once');
+  });
+
+  // ---------- build-report: brief.mockups shape tolerance ----------
+
+  await test('buildReport — brief.mockups as array (legacy)', async () => {
+    // Use a throwaway project root with just enough scaffolding for buildReport.
+    const root = tmpDir('mockup-array');
+    fs.writeFileSync(path.join(root, 'brief.json'), JSON.stringify({
+      projectId: 'test', researchQuestion: 'test q', dimensions: [],
+      entities: [], mockups: [{ title: 'A', hypothesis: 'h', filePath: 'mockups/a.html' }],
+    }));
+    fs.writeFileSync(path.join(root, 'entity-data.json'), '{}');
+    fs.writeFileSync(path.join(root, 'patterns.json'), JSON.stringify({ patterns: [], recommendations: [], observations: [] }));
+    fs.mkdirSync(path.join(root, 'mockups'));
+    fs.writeFileSync(path.join(root, 'mockups', 'a.html'), '<!doctype html><title>a</title>');
+    const { buildReport } = require('../build-report');
+    const out = path.join(root, 'research-report.html');
+    await buildReport({ briefPath: path.join(root, 'brief.json'), entityDataPath: path.join(root, 'entity-data.json'), patternsPath: path.join(root, 'patterns.json'), outputPath: out });
+    const html = fs.readFileSync(out, 'utf8');
+    assert.ok(html.includes('mockup-card'), 'expected mockup card markup from array-shape brief.mockups');
+  });
+
+  await test('buildReport — brief.mockups as {count, items} (new /scout:execute shape)', async () => {
+    const root = tmpDir('mockup-object');
+    fs.writeFileSync(path.join(root, 'brief.json'), JSON.stringify({
+      projectId: 'test', researchQuestion: 'test q', dimensions: [],
+      entities: [],
+      mockups: { count: 1, items: [{ title: 'A', hypothesis: 'h', filePath: 'mockups/a.html' }] },
+    }));
+    fs.writeFileSync(path.join(root, 'entity-data.json'), '{}');
+    fs.writeFileSync(path.join(root, 'patterns.json'), JSON.stringify({ patterns: [], recommendations: [], observations: [] }));
+    fs.mkdirSync(path.join(root, 'mockups'));
+    fs.writeFileSync(path.join(root, 'mockups', 'a.html'), '<!doctype html><title>a</title>');
+    const { buildReport } = require('../build-report');
+    const out = path.join(root, 'research-report.html');
+    await buildReport({ briefPath: path.join(root, 'brief.json'), entityDataPath: path.join(root, 'entity-data.json'), patternsPath: path.join(root, 'patterns.json'), outputPath: out });
+    const html = fs.readFileSync(out, 'utf8');
+    assert.ok(html.includes('mockup-card'), 'expected mockup card markup from {count,items}-shape brief.mockups');
   });
 
   // ----------

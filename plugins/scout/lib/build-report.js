@@ -274,9 +274,16 @@ async function buildReport(config) {
   const templatePath = path.resolve(__dirname, '..', 'templates', 'research-report.html.ejs');
   const tpl = fs.readFileSync(templatePath, 'utf8');
 
-  // Mockups: resolve inline if not already passed
+  // Mockups: resolve inline if not already passed.
+  // /scout:execute writes brief.mockups as { count, items: [...] } but older
+  // runs (and direct CLI callers) may pass a bare array. Accept both shapes.
+  function extractMockupItems(m) {
+    if (Array.isArray(m)) return m;
+    if (m && typeof m === 'object' && Array.isArray(m.items)) return m.items;
+    return [];
+  }
   const resolvedMockups = Array.isArray(mockups) && mockups.length ? mockups
-    : (Array.isArray(brief.mockups) ? brief.mockups : []);
+    : extractMockupItems(brief.mockups);
 
   // Battlecards: resolve inline if not already passed. Caller (execute skill)
   // typically threads a {id,label,category,filePath} array; falls back to

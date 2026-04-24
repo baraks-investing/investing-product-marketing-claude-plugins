@@ -207,6 +207,51 @@ function tmpDir(tag) {
     assert.strictEqual(out.patterns[1].count, 6);
   });
 
+  await test('normalizePatterns — empty-string value does not emit dangling separator', () => {
+    // Guard against Codex-flagged edge case: { value: "", percent: 5 } used to
+    // produce main = " · 5%". Treat empty/whitespace-only value as absent.
+    const input = {
+      execStats: [
+        { label: 'Only percent', value: '', percent: 5 },
+        { label: 'Whitespace value', value: '   ', percent: 12 },
+      ],
+    };
+    const out = normalizePatterns(input);
+    assert.strictEqual(out.execStats[0].main, '5%', 'empty string value: ' + out.execStats[0].main);
+    assert.strictEqual(out.execStats[1].main, '12%', 'whitespace value: ' + out.execStats[1].main);
+  });
+
+  await test('normalizePatterns — recommendations without body fall back to empty string', () => {
+    // Codex-flagged: missing body used to pass-through and render literal 'undefined'.
+    const input = {
+      recommendations: [
+        { title: 'Has rationale', rationale: 'x' },
+        { title: 'Has body', body: 'y' },
+        { title: 'Has neither' },
+      ],
+    };
+    const out = normalizePatterns(input);
+    assert.strictEqual(out.recommendations[0].body, 'x', 'rationale alias: ' + out.recommendations[0].body);
+    assert.strictEqual(out.recommendations[1].body, 'y');
+    assert.strictEqual(out.recommendations[2].body, '', 'missing body normalized to empty string, got: ' + JSON.stringify(out.recommendations[2].body));
+  });
+
+  await test('normalizePatterns — evidence_count percent is clamped to [0, 100]', () => {
+    // Codex-flagged: "30 / 24" used to yield percent 125. Clamp it so the
+    // template's bar scale and value label stay in bounds.
+    const input = {
+      patterns: [
+        { title: 'Over-100', evidence_count: '30 / 24', description: '' },
+        { title: 'Under-0 impossible but safe', evidence_count: '0 / 10', description: '' },
+      ],
+    };
+    const out = normalizePatterns(input);
+    assert.strictEqual(out.patterns[0].percent, 100, 'clamp >100: ' + out.patterns[0].percent);
+    assert.strictEqual(out.patterns[0].count, 30);
+    assert.strictEqual(out.patterns[0].denominator, 24);
+    assert.strictEqual(out.patterns[1].percent, 0);
+  });
+
   // ---------- filterUrlsByResume ----------
 
   await test('filterUrlsByResume — skips successful ids with on-disk files', () => {

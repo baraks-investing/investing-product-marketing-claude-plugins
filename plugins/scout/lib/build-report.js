@@ -64,9 +64,13 @@ function normalizePatterns(doc) {
     const label = it.label != null ? it.label : (it.name != null ? it.name : undefined);
     let main = it.main;
     if (main == null) {
-      if (it.value != null && it.percent != null) main = `${it.value} · ${it.percent}%`;
-      else if (it.value != null) main = String(it.value);
-      else if (it.percent != null) main = `${it.percent}%`;
+      // `value` may be the empty string on a drifted input — treat "" as absent
+      // so we don't emit a dangling " · 53%" with a leading separator.
+      const hasValue = it.value != null && String(it.value).trim() !== '';
+      const hasPercent = it.percent != null;
+      if (hasValue && hasPercent) main = `${it.value} · ${it.percent}%`;
+      else if (hasValue) main = String(it.value);
+      else if (hasPercent) main = `${it.percent}%`;
     }
     const sub = it.sub != null ? it.sub
       : (it.detail != null ? it.detail
@@ -109,7 +113,10 @@ function normalizePatterns(doc) {
       if (m) {
         const count = parseInt(m[1], 10);
         const denom = parseInt(m[2], 10);
-        it = { ...it, count, denominator: denom, percent: denom > 0 ? Math.round((count / denom) * 100) : 0 };
+        // Clamp to [0, 100] so malformed inputs like "30 / 24" don't blow past 100%.
+        const rawPct = denom > 0 ? Math.round((count / denom) * 100) : 0;
+        const percent = Math.max(0, Math.min(100, rawPct));
+        it = { ...it, count, denominator: denom, percent };
       }
     }
     // Common variant: generator returned `entities` but template reads `examples`.
@@ -152,9 +159,11 @@ function normalizePatterns(doc) {
   const recommendationsIn = Array.isArray(doc.recommendations) ? doc.recommendations : [];
   const recommendations = recommendationsIn.map((it) => {
     if (!it || typeof it !== 'object') return it;
-    if ('body' in it) return it;
-    if ('rationale' in it) return { ...it, body: it.rationale };
-    return it;
+    // Canonical template key is `body`. Accept `rationale` as alias; default to
+    // empty string so the template never renders literal "undefined".
+    if ('body' in it && it.body != null) return it;
+    if (it.rationale != null) return { ...it, body: it.rationale };
+    return { ...it, body: '' };
   });
 
   const observations = Array.isArray(doc.observations)

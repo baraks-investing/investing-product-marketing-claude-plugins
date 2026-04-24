@@ -56,23 +56,39 @@ function normalizePatterns(doc) {
   const execStatsIn = Array.isArray(doc.execStats) ? doc.execStats : [];
   const execStats = execStatsIn.map((it) => {
     if (!it || typeof it !== 'object') return it;
-    if ('main' in it || 'sub' in it) return it; // template shape
-    if ('value' in it && ('detail' in it || 'description' in it)) {
-      return { label: it.label, main: it.value, sub: it.detail != null ? it.detail : it.description };
+    if ('main' in it || 'sub' in it) return it; // already template shape
+    // Canonical template keys are {label, main, sub}. Translate common variants:
+    //   label ← label | name
+    //   main  ← main | (value + optional percent) | percent
+    //   sub   ← sub | detail | description | note
+    const label = it.label != null ? it.label : (it.name != null ? it.name : undefined);
+    let main = it.main;
+    if (main == null) {
+      if (it.value != null && it.percent != null) main = `${it.value} · ${it.percent}%`;
+      else if (it.value != null) main = String(it.value);
+      else if (it.percent != null) main = `${it.percent}%`;
     }
-    return it;
+    const sub = it.sub != null ? it.sub
+      : (it.detail != null ? it.detail
+      : (it.description != null ? it.description
+      : (it.note != null ? it.note : undefined)));
+    return { ...it, label, main, sub };
   });
 
   const bestPracticesIn = Array.isArray(doc.bestPractices) ? doc.bestPractices : [];
   const bestPractices = bestPracticesIn.map((it) => {
     if (!it || typeof it !== 'object') return it;
+    // Canonical template keys are {rule, detail}. Translate common variants:
+    //   rule   ← rule | title | practice
+    //   detail ← detail | description | rationale
     let rule = it.rule;
-    let detail = it.detail;
     if (rule == null && it.title != null) rule = it.title;
+    if (rule == null && it.practice != null) rule = it.practice;
+    let detail = it.detail;
     if (detail == null && it.description != null) detail = it.description;
+    if (detail == null && it.rationale != null) detail = it.rationale;
     if (Array.isArray(it.evidence_entities) && it.evidence_entities.length) {
       const joined = it.evidence_entities.join(', ');
-      const suffix = ` Evidence: ${joined}.`;
       const body = typeof detail === 'string' ? detail : '';
       if (!body.includes('Evidence:')) {
         detail = (body ? body.replace(/\s*$/, '') + ' ' : '') + `Evidence: ${joined}.`;
@@ -85,6 +101,21 @@ function normalizePatterns(doc) {
   const patterns = [];
   patternsIn.forEach((it) => {
     if (!it || typeof it !== 'object') { patterns.push(it); return; }
+    // Common variant: evidence_count is a string like "16 / 30" — parse into
+    // numeric percent/count/denominator so the template's bar renders.
+    if (it.evidence_count && typeof it.evidence_count === 'string'
+        && it.percent == null && it.count == null) {
+      const m = it.evidence_count.match(/(\d+)\s*\/\s*(\d+)/);
+      if (m) {
+        const count = parseInt(m[1], 10);
+        const denom = parseInt(m[2], 10);
+        it = { ...it, count, denominator: denom, percent: denom > 0 ? Math.round((count / denom) * 100) : 0 };
+      }
+    }
+    // Common variant: generator returned `entities` but template reads `examples`.
+    if (!Array.isArray(it.examples) && Array.isArray(it.entities)) {
+      it = { ...it, examples: it.entities };
+    }
     // Template shape — pass through.
     if ('title' in it && ('percent' in it || 'count' in it || 'denominator' in it || 'examples' in it || 'description' in it)) {
       patterns.push(it);

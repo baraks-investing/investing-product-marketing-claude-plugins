@@ -151,6 +151,37 @@ Once every approved entity has phase `"analyzed"`, spawn a subagent with `analys
 }
 ```
 
+### OUTPUT SHAPE — required keys (strict)
+
+The report builder (`lib/build-report.js`) reads these exact keys. Emit them verbatim. `lib/build-report.js` translates a few common variants (see `normalizePatterns()`), but emitting the canonical shape avoids any drift. The subagent prompt must quote this block verbatim:
+
+```
+execStats: [{ label: string, main: string, sub: string }]
+  - label: short title (3-5 words)
+  - main: headline stat including count AND percent together (e.g., "16 / 30 · 53%")
+  - sub: one-sentence interpretation
+
+bestPractices: [{ rule: string, detail: string, evidence_entities?: string[] }]
+  - rule: short imperative sentence ("Lead with product UI")
+  - detail: one-paragraph rationale
+  - evidence_entities: optional list of entity ids that prove the practice
+
+patterns: [{ title: string, percent: number, count: number, denominator: number, description: string, examples: string[] }]
+  - percent: 0-100, the proportion of entities matching this pattern (REQUIRED — the
+    frequency chart renders a 2px sliver if this is missing)
+  - count: raw numerator
+  - denominator: raw denominator (usually total_entities)
+  - examples: array of entity ids (NOT `entities` — that key is not read by the template)
+
+recommendations: [{ title: string, body: string }]
+  - NOT `rationale`; use `body`.
+
+top_level_observations: string[]
+  - Plain strings. The builder also accepts `observations: string[]` as an alias.
+```
+
+Forbidden variants that will silently render empty UI: `{name}` instead of `{label}`, `{note}` instead of `{sub}`, `{practice, rationale}` instead of `{rule, detail}`, `{evidence_count: "N / M"}` instead of numeric `{percent, count, denominator}`, `{entities}` instead of `{examples}`.
+
 On top of that standard shape, fork the aggregator prompt based on `brief.framework_lens`. The lens-specific block is ADDITIONAL to the standard fields above — always produce both.
 
 ### Lens: `descriptive` (default, v3 behavior)

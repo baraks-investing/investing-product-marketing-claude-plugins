@@ -135,6 +135,78 @@ function tmpDir(tag) {
     assert.strictEqual(out.bestPractices[0].detail, 'ok');
   });
 
+  // ---------- normalizePatterns — variant keys (scout-plugin-bug-report fixes) ----------
+
+  await test('normalizePatterns — execStats {name, value, percent, note} variant', () => {
+    const input = {
+      execStats: [
+        { name: 'Product-UI hero', value: '16 / 30', percent: 53, note: 'The dominant pattern.' },
+        { name: 'No device chrome', value: '24 / 30', percent: 80 },
+        { name: 'Real humans', percent: 7 },
+      ],
+    };
+    const out = normalizePatterns(input);
+    // name → label
+    assert.strictEqual(out.execStats[0].label, 'Product-UI hero');
+    // value + percent → "value · percent%"
+    assert.strictEqual(out.execStats[0].main, '16 / 30 · 53%');
+    // note → sub
+    assert.strictEqual(out.execStats[0].sub, 'The dominant pattern.');
+    // no note still works
+    assert.strictEqual(out.execStats[1].main, '24 / 30 · 80%');
+    assert.strictEqual(out.execStats[1].sub, undefined);
+    // percent-only → "N%"
+    assert.strictEqual(out.execStats[2].main, '7%');
+  });
+
+  await test('normalizePatterns — bestPractices {practice, rationale} variant', () => {
+    const input = {
+      bestPractices: [
+        { practice: 'Lead with product UI', rationale: 'Removes the what-is-this friction.' },
+        { practice: 'Skip the device mockup', rationale: 'Floating UI is modern.', evidence_entities: ['stripe', 'attio'] },
+      ],
+    };
+    const out = normalizePatterns(input);
+    // practice → rule
+    assert.strictEqual(out.bestPractices[0].rule, 'Lead with product UI');
+    // rationale → detail
+    assert.strictEqual(out.bestPractices[0].detail, 'Removes the what-is-this friction.');
+    // evidence_entities still append
+    assert.ok(out.bestPractices[1].detail.includes('Evidence: stripe, attio.'),
+      'evidence appended: ' + out.bestPractices[1].detail);
+  });
+
+  await test('normalizePatterns — patterns {evidence_count string, entities} variant', () => {
+    const input = {
+      patterns: [
+        {
+          title: 'Floating UI beats device mockups',
+          evidence_count: '24 / 30',
+          description: 'Only 2 of 30 show browser chrome.',
+          entities: ['stripe', 'slack', 'attio'],
+        },
+        {
+          title: 'Already numeric',
+          percent: 20,
+          count: 6,
+          denominator: 30,
+          description: 'no-op',
+          examples: [],
+        },
+      ],
+    };
+    const out = normalizePatterns(input);
+    // evidence_count "24 / 30" → numeric percent=80, count=24, denominator=30
+    assert.strictEqual(out.patterns[0].percent, 80);
+    assert.strictEqual(out.patterns[0].count, 24);
+    assert.strictEqual(out.patterns[0].denominator, 30);
+    // entities → examples
+    assert.deepStrictEqual(out.patterns[0].examples, ['stripe', 'slack', 'attio']);
+    // pattern that was already canonical is untouched
+    assert.strictEqual(out.patterns[1].percent, 20);
+    assert.strictEqual(out.patterns[1].count, 6);
+  });
+
   // ---------- filterUrlsByResume ----------
 
   await test('filterUrlsByResume — skips successful ids with on-disk files', () => {

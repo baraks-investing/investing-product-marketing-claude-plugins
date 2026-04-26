@@ -56,23 +56,43 @@ function normalizePatterns(doc) {
   const execStatsIn = Array.isArray(doc.execStats) ? doc.execStats : [];
   const execStats = execStatsIn.map((it) => {
     if (!it || typeof it !== 'object') return it;
-    if ('main' in it || 'sub' in it) return it; // template shape
-    if ('value' in it && ('detail' in it || 'description' in it)) {
-      return { label: it.label, main: it.value, sub: it.detail != null ? it.detail : it.description };
+    if ('main' in it || 'sub' in it) return it; // already template shape
+    // Canonical template keys are {label, main, sub}. Translate common variants:
+    //   label ← label | name
+    //   main  ← main | (value + optional percent) | percent
+    //   sub   ← sub | detail | description | note
+    const label = it.label != null ? it.label : (it.name != null ? it.name : undefined);
+    let main = it.main;
+    if (main == null) {
+      // `value` may be the empty string on a drifted input — treat "" as absent
+      // so we don't emit a dangling " · 53%" with a leading separator.
+      const hasValue = it.value != null && String(it.value).trim() !== '';
+      const hasPercent = it.percent != null;
+      if (hasValue && hasPercent) main = `${it.value} · ${it.percent}%`;
+      else if (hasValue) main = String(it.value);
+      else if (hasPercent) main = `${it.percent}%`;
     }
-    return it;
+    const sub = it.sub != null ? it.sub
+      : (it.detail != null ? it.detail
+      : (it.description != null ? it.description
+      : (it.note != null ? it.note : undefined)));
+    return { ...it, label, main, sub };
   });
 
   const bestPracticesIn = Array.isArray(doc.bestPractices) ? doc.bestPractices : [];
   const bestPractices = bestPracticesIn.map((it) => {
     if (!it || typeof it !== 'object') return it;
+    // Canonical template keys are {rule, detail}. Translate common variants:
+    //   rule   ← rule | title | practice
+    //   detail ← detail | description | rationale
     let rule = it.rule;
-    let detail = it.detail;
     if (rule == null && it.title != null) rule = it.title;
+    if (rule == null && it.practice != null) rule = it.practice;
+    let detail = it.detail;
     if (detail == null && it.description != null) detail = it.description;
+    if (detail == null && it.rationale != null) detail = it.rationale;
     if (Array.isArray(it.evidence_entities) && it.evidence_entities.length) {
       const joined = it.evidence_entities.join(', ');
-      const suffix = ` Evidence: ${joined}.`;
       const body = typeof detail === 'string' ? detail : '';
       if (!body.includes('Evidence:')) {
         detail = (body ? body.replace(/\s*$/, '') + ' ' : '') + `Evidence: ${joined}.`;
@@ -85,6 +105,24 @@ function normalizePatterns(doc) {
   const patterns = [];
   patternsIn.forEach((it) => {
     if (!it || typeof it !== 'object') { patterns.push(it); return; }
+    // Common variant: evidence_count is a string like "16 / 30" — parse into
+    // numeric percent/count/denominator so the template's bar renders.
+    if (it.evidence_count && typeof it.evidence_count === 'string'
+        && it.percent == null && it.count == null) {
+      const m = it.evidence_count.match(/(\d+)\s*\/\s*(\d+)/);
+      if (m) {
+        const count = parseInt(m[1], 10);
+        const denom = parseInt(m[2], 10);
+        // Clamp to [0, 100] so malformed inputs like "30 / 24" don't blow past 100%.
+        const rawPct = denom > 0 ? Math.round((count / denom) * 100) : 0;
+        const percent = Math.max(0, Math.min(100, rawPct));
+        it = { ...it, count, denominator: denom, percent };
+      }
+    }
+    // Common variant: generator returned `entities` but template reads `examples`.
+    if (!Array.isArray(it.examples) && Array.isArray(it.entities)) {
+      it = { ...it, examples: it.entities };
+    }
     // Template shape — pass through.
     if ('title' in it && ('percent' in it || 'count' in it || 'denominator' in it || 'examples' in it || 'description' in it)) {
       patterns.push(it);
@@ -121,9 +159,11 @@ function normalizePatterns(doc) {
   const recommendationsIn = Array.isArray(doc.recommendations) ? doc.recommendations : [];
   const recommendations = recommendationsIn.map((it) => {
     if (!it || typeof it !== 'object') return it;
-    if ('body' in it) return it;
-    if ('rationale' in it) return { ...it, body: it.rationale };
-    return it;
+    // Canonical template key is `body`. Accept `rationale` as alias; default to
+    // empty string so the template never renders literal "undefined".
+    if ('body' in it && it.body != null) return it;
+    if (it.rationale != null) return { ...it, body: it.rationale };
+    return { ...it, body: '' };
   });
 
   const observations = Array.isArray(doc.observations)

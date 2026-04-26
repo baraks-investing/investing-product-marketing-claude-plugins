@@ -166,12 +166,12 @@ body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Aria
 .entity-shot img { width: 100%; display: block; min-height: 120px; }
 .entity-shot .no-screenshot { height: 300px; }
 
-/* Entity thumbnail (capped height, click to expand into lightbox) */
-.entity-thumb-btn { position: relative; display: block; width: 100%; padding: 0; margin: 0; border: 0; background: transparent; cursor: zoom-in; line-height: 0; }
-.entity-thumb-btn:focus { outline: 2px solid var(--inv-orange); outline-offset: -2px; }
+/* Entity thumbnail (capped height; only the ⤢ button expands into lightbox) */
+.entity-thumb-wrap { position: relative; line-height: 0; }
 .entity-thumb { width: 100%; max-height: 1200px; object-fit: cover; object-position: top; display: block; }
-.entity-thumb-icon { position: absolute; top: 10px; right: 10px; background: rgba(24,28,33,0.78); color: #fff; width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; line-height: 1; pointer-events: none; backdrop-filter: blur(6px); transition: background 0.15s; }
-.entity-thumb-btn:hover .entity-thumb-icon { background: var(--inv-orange); }
+.entity-thumb-expand { position: absolute; top: 10px; right: 10px; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 6px; background: rgba(24,28,33,0.78); color: #fff; font-size: 18px; font-weight: 700; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(6px); transition: background 0.15s; }
+.entity-thumb-expand:hover { background: var(--inv-orange); }
+.entity-thumb-expand:focus { outline: 3px solid var(--inv-orange); outline-offset: 2px; }
 
 /* Lightbox modal */
 .entity-lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.86); z-index: 1000; display: none; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 32px 24px; }
@@ -531,10 +531,10 @@ body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Aria
       <div class="entity-body">
         <div class="entity-shot">
           <% if (e.screenshot) { %>
-            <button type="button" class="entity-thumb-btn" data-full-src="<%= e.screenshotFull || e.screenshot %>" data-label="<%= e.label %>" aria-label="Expand screenshot of <%= e.label %>">
-              <img class="entity-thumb" src="<%= e.screenshotPreview || e.screenshot %>" alt="<%= e.label %> screenshot — click to expand">
-              <span class="entity-thumb-icon" aria-hidden="true">⤢</span>
-            </button>
+            <div class="entity-thumb-wrap">
+              <img class="entity-thumb" src="<%= e.screenshotPreview || e.screenshot %>" alt="<%= e.label %> screenshot">
+              <button type="button" class="entity-thumb-expand" data-full-src="<%= e.screenshotFull || e.screenshot %>" data-label="<%= e.label %>" aria-label="Expand screenshot of <%= e.label %>">⤢</button>
+            </div>
           <% } else { %>
             <div class="no-screenshot">No screenshot available</div>
           <% } %>
@@ -716,9 +716,18 @@ body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Aria
   window.addEventListener('scroll', onScroll, { passive: true });
   onScroll();
 })();
+</script>
 
+<!-- Lightbox markup must come BEFORE the init script so getElementById works. -->
+<div class="entity-lightbox" id="entity-lightbox" role="dialog" aria-modal="true" aria-hidden="true" aria-label="Full-size screenshot">
+  <button type="button" class="lightbox-close" aria-label="Close screenshot">×</button>
+  <img src="" alt="">
+  <div class="lightbox-caption"></div>
+</div>
+
+<script>
 // ---- Entity thumbnail lightbox ----
-// Click on .entity-thumb-btn opens a fixed-position modal showing the
+// Click on .entity-thumb-expand opens a fixed-position modal showing the
 // full-size screenshot (data-full-src on the button). Esc / click-outside /
 // X-button close. Focus returns to the triggering button on close.
 (function lightboxInit() {
@@ -729,7 +738,7 @@ body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Aria
   var lbClose = lb.querySelector('.lightbox-close');
   var lastTrigger = null;
 
-  function open(triggerBtn) {
+  function openLightbox(triggerBtn) {
     var src = triggerBtn.getAttribute('data-full-src');
     var label = triggerBtn.getAttribute('data-label') || '';
     if (!src) return;
@@ -741,7 +750,7 @@ body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Aria
     document.body.style.overflow = 'hidden';
     setTimeout(function () { lbClose.focus(); }, 50);
   }
-  function close() {
+  function closeLightbox() {
     lb.setAttribute('aria-hidden', 'true');
     lbImg.setAttribute('src', '');
     document.body.style.overflow = '';
@@ -749,29 +758,24 @@ body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Aria
     lastTrigger = null;
   }
 
-  // Open on button click (delegated — the buttons are rendered server-side)
+  // Delegated click handler — the ⤢ button is the only thing that opens.
   document.addEventListener('click', function (e) {
-    var btn = e.target.closest('.entity-thumb-btn');
-    if (btn) { e.preventDefault(); open(btn); }
+    var btn = e.target.closest('.entity-thumb-expand');
+    if (btn) {
+      e.preventDefault();
+      e.stopPropagation();
+      openLightbox(btn);
+    }
   });
-  // Close button
-  lbClose.addEventListener('click', close);
-  // Click outside the image (on the dark overlay) closes
+  lbClose.addEventListener('click', closeLightbox);
+  // Click on dark overlay (not the image) closes.
   lb.addEventListener('click', function (e) {
-    if (e.target === lb) close();
+    if (e.target === lb) closeLightbox();
   });
-  // Esc closes
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && lb.getAttribute('aria-hidden') === 'false') close();
+    if (e.key === 'Escape' && lb.getAttribute('aria-hidden') === 'false') closeLightbox();
   });
 })();
 </script>
-
-<!-- Lightbox markup (singleton, populated by JS on entity-thumb click) -->
-<div class="entity-lightbox" id="entity-lightbox" role="dialog" aria-modal="true" aria-hidden="true" aria-label="Full-size screenshot">
-  <button type="button" class="lightbox-close" aria-label="Close screenshot">×</button>
-  <img src="" alt="">
-  <div class="lightbox-caption"></div>
-</div>
 </body>
 </html>

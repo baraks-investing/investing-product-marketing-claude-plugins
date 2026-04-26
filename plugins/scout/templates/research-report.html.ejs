@@ -165,6 +165,22 @@ body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Aria
 .entity-shot { border-radius: 8px; overflow: hidden; background: var(--inv-well); border: 1px solid var(--inv-stroke); }
 .entity-shot img { width: 100%; display: block; min-height: 120px; }
 .entity-shot .no-screenshot { height: 300px; }
+
+/* Entity thumbnail (capped height; only the ⤢ button expands into lightbox) */
+.entity-thumb-wrap { position: relative; line-height: 0; }
+.entity-thumb { width: 100%; max-height: 1200px; object-fit: cover; object-position: top; display: block; }
+.entity-thumb-expand { position: absolute; top: 10px; right: 10px; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 6px; background: rgba(24,28,33,0.78); color: #fff; font-size: 18px; font-weight: 700; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(6px); transition: background 0.15s; }
+.entity-thumb-expand:hover { background: var(--inv-orange); }
+.entity-thumb-expand:focus { outline: 3px solid var(--inv-orange); outline-offset: 2px; }
+
+/* Lightbox modal */
+.entity-lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.86); z-index: 1000; display: none; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 32px 24px; }
+.entity-lightbox[aria-hidden="false"] { display: flex; }
+.entity-lightbox img { max-width: min(1200px, 100%); width: auto; height: auto; display: block; box-shadow: 0 8px 48px rgba(0,0,0,0.5); border-radius: 4px; }
+.lightbox-close { position: fixed; top: 18px; right: 24px; width: 44px; height: 44px; border-radius: 50%; border: 0; background: rgba(255,255,255,0.92); color: #181C21; font-size: 22px; font-weight: 700; line-height: 1; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 1001; }
+.lightbox-close:hover { background: var(--inv-orange); color: #fff; }
+.lightbox-close:focus { outline: 3px solid var(--inv-orange); outline-offset: 2px; }
+.lightbox-caption { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.85); font-size: 13px; font-weight: 500; background: rgba(24,28,33,0.7); padding: 6px 14px; border-radius: 4px; backdrop-filter: blur(6px); }
 .entity-side { display: flex; flex-direction: column; gap: 16px; }
 .rationale-quote { background: var(--inv-well); border-left: 4px solid var(--inv-orange); padding: 14px 18px; border-radius: 6px; font-size: 14px; color: var(--inv-text); line-height: 1.6; }
 .rationale-quote::before { content: '"'; color: var(--inv-orange); font-size: 24px; font-weight: 700; margin-right: 4px; }
@@ -527,7 +543,10 @@ body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Aria
       <div class="entity-body">
         <div class="entity-shot">
           <% if (e.screenshot) { %>
-            <img src="<%= e.screenshot %>" alt="<%= e.label %> screenshot">
+            <div class="entity-thumb-wrap">
+              <img class="entity-thumb" src="<%= e.screenshotPreview || e.screenshot %>" alt="<%= e.label %> screenshot">
+              <button type="button" class="entity-thumb-expand" data-full-src="<%= e.screenshotFull || e.screenshot %>" data-label="<%= e.label %>" aria-label="Expand screenshot of <%= e.label %>">⤢</button>
+            </div>
           <% } else { %>
             <div class="no-screenshot">No screenshot available</div>
           <% } %>
@@ -708,6 +727,66 @@ body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Aria
   }
   window.addEventListener('scroll', onScroll, { passive: true });
   onScroll();
+})();
+</script>
+
+<!-- Lightbox markup must come BEFORE the init script so getElementById works. -->
+<div class="entity-lightbox" id="entity-lightbox" role="dialog" aria-modal="true" aria-hidden="true" aria-label="Full-size screenshot">
+  <button type="button" class="lightbox-close" aria-label="Close screenshot">×</button>
+  <img src="" alt="">
+  <div class="lightbox-caption"></div>
+</div>
+
+<script>
+// ---- Entity thumbnail lightbox ----
+// Click on .entity-thumb-expand opens a fixed-position modal showing the
+// full-size screenshot (data-full-src on the button). Esc / click-outside /
+// X-button close. Focus returns to the triggering button on close.
+(function lightboxInit() {
+  var lb = document.getElementById('entity-lightbox');
+  if (!lb) return;
+  var lbImg = lb.querySelector('img');
+  var lbCaption = lb.querySelector('.lightbox-caption');
+  var lbClose = lb.querySelector('.lightbox-close');
+  var lastTrigger = null;
+
+  function openLightbox(triggerBtn) {
+    var src = triggerBtn.getAttribute('data-full-src');
+    var label = triggerBtn.getAttribute('data-label') || '';
+    if (!src) return;
+    lastTrigger = triggerBtn;
+    lbImg.setAttribute('src', src);
+    lbImg.setAttribute('alt', label + ' — full screenshot');
+    if (lbCaption) lbCaption.textContent = label;
+    lb.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    setTimeout(function () { lbClose.focus(); }, 50);
+  }
+  function closeLightbox() {
+    lb.setAttribute('aria-hidden', 'true');
+    lbImg.setAttribute('src', '');
+    document.body.style.overflow = '';
+    if (lastTrigger && typeof lastTrigger.focus === 'function') lastTrigger.focus();
+    lastTrigger = null;
+  }
+
+  // Delegated click handler — the ⤢ button is the only thing that opens.
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.entity-thumb-expand');
+    if (btn) {
+      e.preventDefault();
+      e.stopPropagation();
+      openLightbox(btn);
+    }
+  });
+  lbClose.addEventListener('click', closeLightbox);
+  // Click on dark overlay (not the image) closes.
+  lb.addEventListener('click', function (e) {
+    if (e.target === lb) closeLightbox();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && lb.getAttribute('aria-hidden') === 'false') closeLightbox();
+  });
 })();
 </script>
 </body>

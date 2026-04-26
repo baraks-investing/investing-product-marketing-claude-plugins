@@ -13,7 +13,7 @@ You receive a single JSON object:
 
 ```json
 {
-  "decision_type": "positioning" | "pricing" | "feature_roadmap" | "launch_messaging" | "ux_pattern" | "gtm" | "battlecard" | "other",
+  "decision_type": "positioning" | "pricing" | "feature_roadmap" | "launch_messaging" | "ux_pattern" | "gtm" | "battlecard" | "marketing_design" | "other",
   "research_question": "string",
   "session_model": "opus" | "sonnet" | "haiku"
 }
@@ -133,6 +133,14 @@ Return exactly this shape:
 - visual_evidence: `desktop-atf`
 - mockup_count: `none`
 - entity_count: 15 · min_verified: 10
+
+### marketing_design
+- inclusion (COMPANY-level): SaaS or consumer product with a public marketing homepage, self-serve signup or trial, active product (shipped within last 12 months), operates in English-speaking markets, B2B or prosumer audience
+- exclusion (COMPANY-level): enterprise-sales-only (no public homepage hero), agency or services business, discontinued or sunset product, non-English-only markets, login-walled site (no reachable marketing page), pre-revenue or stealth
+- dimensions: imagery_type, composition, color_palette, motion_vs_static, device_framing, text_overlay_style, ui_vs_real_world, emotional_register
+- visual_evidence: `desktop-atf`
+- mockup_count: `3-5`
+- entity_count: 20 · min_verified: 15
 
 ### other
 - pick sensible neutral COMPANY-level defaults based on the research question wording; keep min_verified at 15

@@ -17,7 +17,7 @@ You receive a single JSON object:
   "hypothesis_brief": "one-liner about what this concept tries to prove",
   "patterns": { ...patterns.json contents... },
   "entity_data": { ...entity-data.json contents... },
-  "decision_type": "positioning" | "pricing" | "feature_roadmap" | "launch_messaging" | "ux_pattern" | "gtm" | "battlecard" | "other",
+  "decision_type": "positioning" | "pricing" | "feature_roadmap" | "launch_messaging" | "ux_pattern" | "gtm" | "battlecard" | "marketing_design" | "other",
   "visual_context": "short brand/context note, e.g., 'Investing.com dark palette, Ultra tier above Pro+'"
 }
 ```

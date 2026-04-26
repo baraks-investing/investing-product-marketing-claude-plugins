@@ -79,31 +79,40 @@ These are the instructions you paste in your company chat/wiki for everyone else
    git clone https://github.com/<investing-org>/investing-product-marketing-claude-plugins.git
    ```
 
-2. **Install the plugin's dependencies** (puppeteer, ejs, sharp):
-   ```bash
-   cd investing-product-marketing-claude-plugins/plugins/scout
-   npm install
-   ```
-   This downloads ~130MB of Puppeteer's Chrome binary. Takes 1-2 minutes the first time.
-
-3. **Register the plugin with Claude Code.** Open Claude Code and run:
+2. **Register the plugin with Claude Code.** Open Claude Code and run:
    ```
    /plugin marketplace add "C:\path\to\investing-product-marketing-claude-plugins"
    ```
    Replace the path with the absolute path to the folder you just cloned.
 
-4. **Install the scout plugin:**
+3. **Install the scout plugin:**
    ```
    /plugin install scout
    ```
    Claude Code will ask where to install it. Pick "user scope" (applies to all projects) or "project scope" (just this repo).
 
-5. **Verify:** type `/sc` in the Claude Code prompt. You should see autocomplete for:
+4. **Verify:** type `/sc` in the Claude Code prompt. You should see autocomplete for:
    - `/scout:plan`
    - `/scout:execute`
    - `/scout:review`
+   - `/scout:install`
 
-If those don't show up, run `/reload-plugins` and try again.
+   If those don't show up, run `/reload-plugins` and try again.
+
+5. **(Optional) Pre-install runtime dependencies.** Scout will auto-install puppeteer/ejs/sharp the first time you run `/scout:plan`, asking for consent first and showing live progress. If you'd rather get it out of the way upfront, run:
+   ```
+   /scout:install
+   ```
+   This pulls Chromium (~170MB), takes ~5 minutes. Apple Silicon Macs: any sharp rebuild is handled automatically.
+
+### Troubleshooting install failures
+
+If `/scout:install` (or the auto-install on first `/scout:plan`) fails, the error message will include a recovery hint. The common cases:
+
+- **"Cannot write to plugin folder"** → restart Claude Code as Administrator (Windows: right-click → Run as Administrator). On macOS, check that the folder isn't on iCloud Drive with offline-only mode.
+- **"npm could not reach the package registry"** → your network is blocking npm. Switch to a personal network or hotspot for the install, or ask IT for an internal npm mirror URL.
+- **"Node.js 18+ required"** → install a recent Node from https://nodejs.org and re-run `/scout:install`.
+- **"npm is not installed"** → install Node.js (npm comes bundled).
 
 ### Your first research
 

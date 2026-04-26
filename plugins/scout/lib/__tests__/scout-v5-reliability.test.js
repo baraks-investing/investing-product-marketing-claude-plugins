@@ -26,6 +26,8 @@ const path = require('path');
 const { normalizePatterns, cropToTop } = require('../build-report');
 const { filterUrlsByResume, newPageWithCdpRetry } = require('../capture');
 const parsePasteBack = require('../parse-paste-back');
+const prereq = require('../prereq-check');
+const installDeps = require('../install-deps');
 
 let failures = 0;
 function test(name, fn) {
@@ -357,6 +359,94 @@ function tmpDir(tag) {
       'inferred framework lens: ' + briefJson.framework_lens);
     assert.strictEqual(briefJson.battlecard_enabled, false,
       'battlecard_enabled false for marketing_design: ' + briefJson.battlecard_enabled);
+  });
+
+  // ---------- prereq-check ----------
+
+  await test('prereq-check — happy path on dev folder reports ok', () => {
+    // The dev folder has node_modules already from the user's manual install.
+    const result = prereq.checkPrereqs();
+    assert.strictEqual(result.ok, true, 'expected ok=true, got: ' + JSON.stringify(result));
+    assert.deepStrictEqual(result.missing, [], 'no missing deps');
+    assert.strictEqual(typeof result.nodeVersion, 'string');
+    assert.strictEqual(result.cacheWritable, true);
+    assert.ok(result.pluginRoot, 'pluginRoot populated');
+  });
+
+  await test('prereq-check — exposes constants matching package.json shape', () => {
+    assert.ok(Array.isArray(prereq.REQUIRED_DEPS) && prereq.REQUIRED_DEPS.length === 3,
+      'REQUIRED_DEPS shape: ' + JSON.stringify(prereq.REQUIRED_DEPS));
+    assert.ok(prereq.REQUIRED_DEPS.indexOf('puppeteer') >= 0);
+    assert.ok(prereq.REQUIRED_DEPS.indexOf('ejs') >= 0);
+    assert.ok(prereq.REQUIRED_DEPS.indexOf('sharp') >= 0);
+    assert.strictEqual(prereq.MIN_NODE_MAJOR, 18);
+  });
+
+  await test('prereq-check — script parses on legacy Node syntax (no modern syntax errors)', () => {
+    // Read the file and confirm no ES6+ tokens leaked in. This test guards
+    // against accidental arrow functions / const / template literals being
+    // added later — the script must parse on Node 14 to report "your Node is
+    // too old" correctly.
+    const src = fs.readFileSync(path.join(__dirname, '..', 'prereq-check.js'), 'utf8');
+    // Strip strings and comments so we don't false-positive on `=>` inside a
+    // string literal (none present, but defensive).
+    const stripped = src
+      .replace(/\/\*[\s\S]*?\*\//g, '') // block comments
+      .replace(/\/\/[^\n]*/g, '')        // line comments
+      .replace(/'(?:\\'|[^'])*'/g, "''") // single-quoted strings
+      .replace(/"(?:\\"|[^"])*"/g, '""'); // double-quoted strings
+    assert.ok(!/=>/.test(stripped), 'no arrow functions');
+    assert.ok(!/`[^`]*`/.test(stripped), 'no template literals');
+    assert.ok(!/\bconst\s/.test(stripped), 'no const keyword');
+    assert.ok(!/\blet\s/.test(stripped), 'no let keyword');
+  });
+
+  await test('prereq-check — CLI mode returns exit code 0 on healthy folder', () => {
+    const cp = require('child_process');
+    const result = cp.spawnSync(process.execPath, [path.join(__dirname, '..', 'prereq-check.js')], {
+      encoding: 'utf8',
+    });
+    assert.strictEqual(result.status, 0, 'exit code: ' + result.status + ' stderr: ' + result.stderr);
+    const parsed = JSON.parse(result.stdout);
+    assert.strictEqual(parsed.ok, true);
+  });
+
+  // ---------- install-deps actionable() error translation ----------
+
+  await test('install-deps actionable — permission errors map to admin-rights hint', () => {
+    const out = installDeps.actionable('npm ERR! code EACCES\nnpm ERR! syscall mkdir');
+    assert.ok(out && out.indexOf('elevated permissions') >= 0,
+      'EACCES mapped to permissions hint, got: ' + out);
+  });
+
+  await test('install-deps actionable — ENOSPC maps to disk-full hint (Codex must-address)', () => {
+    const out = installDeps.actionable('npm ERR! ENOSPC: no space left on device');
+    assert.ok(out && out.indexOf('Disk is full') >= 0,
+      'ENOSPC mapped to disk-full hint, got: ' + out);
+  });
+
+  await test('install-deps actionable — self-signed cert maps to corporate-proxy hint (Codex must-address)', () => {
+    const out = installDeps.actionable('Error: self-signed certificate in certificate chain');
+    assert.ok(out && out.indexOf('SSL certificate') >= 0 && out.indexOf('corporate proxy') >= 0,
+      'cert error mapped to proxy hint, got: ' + out);
+  });
+
+  await test('install-deps actionable — unable to verify cert maps to corporate-proxy hint', () => {
+    const out = installDeps.actionable('npm ERR! Error: unable to verify the first certificate');
+    assert.ok(out && out.indexOf('SSL certificate') >= 0,
+      'unable-to-verify mapped to proxy hint, got: ' + out);
+  });
+
+  await test('install-deps actionable — registry timeouts map to network hint', () => {
+    const out = installDeps.actionable('npm ERR! ETIMEDOUT registry.npmjs.org');
+    assert.ok(out && out.indexOf('npm could not reach') >= 0,
+      'ETIMEDOUT mapped to network hint, got: ' + out);
+  });
+
+  await test('install-deps actionable — unrecognized errors return null (caller surfaces raw)', () => {
+    const out = installDeps.actionable('some random unrecognized error message');
+    assert.strictEqual(out, null,
+      'unknown error returns null so caller can surface raw stderr');
   });
 
   // ---------- filterUrlsByResume ----------

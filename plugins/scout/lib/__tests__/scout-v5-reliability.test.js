@@ -27,6 +27,7 @@ const { normalizePatterns, cropToTop } = require('../build-report');
 const { filterUrlsByResume, newPageWithCdpRetry } = require('../capture');
 const parsePasteBack = require('../parse-paste-back');
 const prereq = require('../prereq-check');
+const installDeps = require('../install-deps');
 
 let failures = 0;
 function test(name, fn) {
@@ -408,6 +409,44 @@ function tmpDir(tag) {
     assert.strictEqual(result.status, 0, 'exit code: ' + result.status + ' stderr: ' + result.stderr);
     const parsed = JSON.parse(result.stdout);
     assert.strictEqual(parsed.ok, true);
+  });
+
+  // ---------- install-deps actionable() error translation ----------
+
+  await test('install-deps actionable — permission errors map to admin-rights hint', () => {
+    const out = installDeps.actionable('npm ERR! code EACCES\nnpm ERR! syscall mkdir');
+    assert.ok(out && out.indexOf('elevated permissions') >= 0,
+      'EACCES mapped to permissions hint, got: ' + out);
+  });
+
+  await test('install-deps actionable — ENOSPC maps to disk-full hint (Codex must-address)', () => {
+    const out = installDeps.actionable('npm ERR! ENOSPC: no space left on device');
+    assert.ok(out && out.indexOf('Disk is full') >= 0,
+      'ENOSPC mapped to disk-full hint, got: ' + out);
+  });
+
+  await test('install-deps actionable — self-signed cert maps to corporate-proxy hint (Codex must-address)', () => {
+    const out = installDeps.actionable('Error: self-signed certificate in certificate chain');
+    assert.ok(out && out.indexOf('SSL certificate') >= 0 && out.indexOf('corporate proxy') >= 0,
+      'cert error mapped to proxy hint, got: ' + out);
+  });
+
+  await test('install-deps actionable — unable to verify cert maps to corporate-proxy hint', () => {
+    const out = installDeps.actionable('npm ERR! Error: unable to verify the first certificate');
+    assert.ok(out && out.indexOf('SSL certificate') >= 0,
+      'unable-to-verify mapped to proxy hint, got: ' + out);
+  });
+
+  await test('install-deps actionable — registry timeouts map to network hint', () => {
+    const out = installDeps.actionable('npm ERR! ETIMEDOUT registry.npmjs.org');
+    assert.ok(out && out.indexOf('npm could not reach') >= 0,
+      'ETIMEDOUT mapped to network hint, got: ' + out);
+  });
+
+  await test('install-deps actionable — unrecognized errors return null (caller surfaces raw)', () => {
+    const out = installDeps.actionable('some random unrecognized error message');
+    assert.strictEqual(out, null,
+      'unknown error returns null so caller can surface raw stderr');
   });
 
   // ---------- filterUrlsByResume ----------

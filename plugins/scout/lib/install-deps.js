@@ -35,7 +35,9 @@ var prereq = require('./prereq-check');
 var PLUGIN_ROOT = prereq.PLUGIN_ROOT;
 
 function actionable(stderr) {
-  // Convert raw npm error output into a recovery hint.
+  // Convert raw npm error output into a recovery hint. Patterns are matched
+  // case-insensitively against the lowercased stderr — keep the search terms
+  // lowercase here.
   var s = String(stderr || '').toLowerCase();
   if (s.indexOf('eacces') >= 0 || s.indexOf('permission denied') >= 0) {
     return [
@@ -44,6 +46,33 @@ function actionable(stderr) {
       '(a) restart Claude Code with elevated permissions (right-click "Run as Administrator" on Windows)',
       '(b) check whether the folder is on a sync-locked drive (OneDrive sometimes locks files)',
       '(c) ask your IT team if your machine has restricted permissions on this path',
+    ].join('\n');
+  }
+  // Disk-full: Chromium is ~170MB and the npm cache adds another few hundred
+  // MB during install, so this is realistic.
+  if (s.indexOf('enospc') >= 0 || s.indexOf('no space left') >= 0) {
+    return [
+      'Disk is full.',
+      'The Chromium download is ~170MB and npm needs additional temp space.',
+      'Free up at least 500MB on your home drive and retry.',
+    ].join('\n');
+  }
+  // Corporate proxy / SSL intercept — common at Investing.com and similar
+  // enterprises. The npm error usually contains "self-signed certificate" or
+  // "unable to verify the first certificate".
+  if (s.indexOf('self-signed certificate') >= 0
+      || s.indexOf('self signed certificate') >= 0
+      || s.indexOf('unable to verify') >= 0
+      || s.indexOf('cert_has_expired') >= 0
+      || s.indexOf('cert ') >= 0
+      || s.indexOf('certificate ') >= 0) {
+    return [
+      'SSL certificate error talking to the npm registry.',
+      'This usually means a corporate proxy or VPN is intercepting the connection.',
+      'Options:',
+      '(a) disconnect from the corporate VPN if you can, then retry',
+      '(b) ask IT for the proxy CA certificate and configure npm with `npm config set cafile <path>`',
+      '(c) last resort (less secure, only on trusted networks): `npm config set strict-ssl false` then retry',
     ].join('\n');
   }
   if (s.indexOf('enotfound') >= 0 || s.indexOf('econnrefused') >= 0 || s.indexOf('etimedout') >= 0 || s.indexOf('registry') >= 0) {
@@ -80,19 +109,23 @@ function runNpmInstall() {
 
 function maybeRebuildSharp() {
   // Apple Silicon sharp edge: occasionally the first npm install lands a
-  // wrong-arch copy. If we detect arm64 darwin AND sharp does not resolve
-  // cleanly, rebuild once.
+  // wrong-arch copy. The require() path catches the obvious failures, but a
+  // wrong-arch native binary can still LOAD silently and crash only when the
+  // native code actually executes (e.g., "Illegal instruction" on first use).
+  // To catch that case, we instantiate sharp after require — that runs native
+  // code synchronously, so a bad binary throws here instead of in production.
   if (process.platform !== 'darwin' || process.arch !== 'arm64') {
     return { ok: true, ran: false };
   }
-  // Try to load sharp; if it throws on require, rebuild.
   var needsRebuild = false;
   try {
-    require.resolve('sharp', { paths: [PLUGIN_ROOT] });
-    // Resolve worked — try a soft load too.
     var sharpPath = require.resolve('sharp', { paths: [PLUGIN_ROOT] });
     delete require.cache[sharpPath];
-    require(sharpPath);
+    var sharpModule = require(sharpPath);
+    // Functional smoke test — exercises the native binary synchronously.
+    // sharp() constructor loads and executes native code; a wrong-arch
+    // binary throws here. Any thrown error → needsRebuild.
+    sharpModule({ create: { width: 1, height: 1, channels: 3, background: { r: 0, g: 0, b: 0 } } });
   } catch (e) {
     needsRebuild = true;
   }
@@ -142,6 +175,7 @@ module.exports = {
   installDeps: installDeps,
   runNpmInstall: runNpmInstall,
   maybeRebuildSharp: maybeRebuildSharp,
+  actionable: actionable, // exported for testing
 };
 
 if (require.main === module) {

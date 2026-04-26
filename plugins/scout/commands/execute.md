@@ -2,9 +2,12 @@
 name: scout:execute
 description: Run per-entity analysis + cross-entity patterns + build the self-contained research HTML (v4). Adds adaptive re-seed when vision verification under-delivers, emits standalone mockup files, generates battlecards when decision_type calls for it, and forks synthesis by framework lens.
 argument-hint: "(no args — reads .agents/scout/brief.json)"
+model: claude-opus-4-7
 ---
 
 # /scout:execute — analyze + build report (v4)
+
+> **Model gate.** You are the AI executing this command. Before any other action, check your own model identity declared in your system prompt ("you are powered by the model named ..."). If you are NOT Claude Opus 4.x, STOP IMMEDIATELY and tell the user: "Scout commands require Claude Opus 4.x with maximum thinking. You appear to be running on [your-model]. Switch to Opus 4.x and re-run." Do NOT proceed to any other phase. The user can override only by editing this command file.
 
 You are the executor for the **scout** research harness. The plan phase produced `.agents/scout/brief.json` (v4 schema: includes `decisionType`, `minVerified`, `reseedRounds`, `framework_lens`, `framework_lens_source`, `battlecard_enabled`, `battlecard_source`), Layer 3 verdicts, and captured screenshots.
 
@@ -161,10 +164,11 @@ execStats: [{ label: string, main: string, sub: string }]
   - main: headline stat including count AND percent together (e.g., "16 / 30 · 53%")
   - sub: one-sentence interpretation
 
-bestPractices: [{ rule: string, detail: string, evidence_entities?: string[] }]
+bestPractices: [{ rule: string, detail: string, evidence_entities?: string[], gallery_entities?: string[] }]
   - rule: short imperative sentence ("Lead with product UI")
   - detail: one-paragraph rationale
   - evidence_entities: optional list of entity ids that prove the practice
+  - gallery_entities: optional 1–3 entity ids picked for visual representativeness of the rule. MUST be a subset of `evidence_entities`. The report renders these as a 2–3 thumb gallery under the rule.
 
 patterns: [{ title: string, percent: number, count: number, denominator: number, description: string, examples: string[] }]
   - percent: 0-100, the proportion of entities matching this pattern (REQUIRED — the
@@ -180,7 +184,7 @@ top_level_observations: string[]
   - Plain strings. The builder also accepts `observations: string[]` as an alias.
 ```
 
-Forbidden variants that will silently render empty UI: `{name}` instead of `{label}`, `{note}` instead of `{sub}`, `{practice, rationale}` instead of `{rule, detail}`, `{evidence_count: "N / M"}` instead of numeric `{percent, count, denominator}`, `{entities}` instead of `{examples}`.
+Forbidden variants that will silently render empty UI: `{name}` instead of `{label}`, `{note}` instead of `{sub}`, `{practice, rationale}` instead of `{rule, detail}`, `{evidence_count: "N / M"}` instead of numeric `{percent, count, denominator}`, `{entities}` instead of `{examples}`. Also: any id placed in `gallery_entities` that is not also present in that practice's `evidence_entities` list will fail build verification — `gallery_entities` must always be a subset of `evidence_entities`, never an independent set.
 
 On top of that standard shape, fork the aggregator prompt based on `brief.framework_lens`. The lens-specific block is ADDITIONAL to the standard fields above — always produce both.
 

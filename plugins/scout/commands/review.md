@@ -2,9 +2,12 @@
 name: scout:review
 description: Final QA pass on the scout deliverable. Runs the rubric against the research HTML, spawns a second-opinion subagent on the final report, produces a scorecard in chat, appends learnings to .agents/scout/LEARNINGS.md, and flips state to done.
 argument-hint: "(no args)"
+model: claude-opus-4-7
 ---
 
 # /scout:review — scorecard and durable learnings
+
+> **Model gate.** You are the AI executing this command. Before any other action, check your own model identity declared in your system prompt ("you are powered by the model named ..."). If you are NOT Claude Opus 4.x, STOP IMMEDIATELY and tell the user: "Scout commands require Claude Opus 4.x with maximum thinking. You appear to be running on [your-model]. Switch to Opus 4.x and re-run." Do NOT proceed to any other phase. The user can override only by editing this command file.
 
 You are the evaluator for the **scout** research harness.
 

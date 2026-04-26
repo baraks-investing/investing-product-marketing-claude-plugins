@@ -85,6 +85,34 @@ body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Aria
 .pattern-card .example-chips { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
 .example-chip { font-size: 11px; padding: 3px 10px; border-radius: 9999px; background: var(--inv-well); color: var(--inv-text); font-weight: 600; border: 1px solid var(--inv-stroke); text-transform: uppercase; letter-spacing: 0.3px; }
 
+/* Evidence gallery — shared component for best-practice and pattern thumbnails */
+.evidence-gallery { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; }
+.evidence-gallery-thumb-wrap { position: relative; width: 200px; border: 1px solid var(--inv-stroke); border-radius: 6px; overflow: hidden; background: var(--inv-well); line-height: 0; flex-shrink: 0; }
+.evidence-gallery-thumb { width: 100%; height: 130px; object-fit: cover; object-position: top; display: block; }
+.evidence-gallery-thumb-label { font-size: 11px; font-weight: 600; color: var(--inv-text); padding: 6px 8px; line-height: 1.3; background: var(--inv-white); border-top: 1px solid var(--inv-stroke); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.evidence-gallery-thumb-expand { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 4px; background: rgba(24,28,33,0.78); color: #fff; font-size: 14px; font-weight: 700; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(6px); transition: background 0.15s; }
+.evidence-gallery-thumb-expand:hover { background: var(--inv-orange); }
+.evidence-gallery-thumb-expand:focus { outline: 3px solid var(--inv-orange); outline-offset: 2px; }
+/* Best-practice gallery sits on the dark card — invert thumb chrome */
+.best-practices-card .evidence-gallery-thumb-wrap { border-color: rgba(255,255,255,0.16); background: rgba(255,255,255,0.04); }
+.best-practices-card .evidence-gallery-thumb-label { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.92); border-top-color: rgba(255,255,255,0.12); }
+.best-practices-card .best-practice-row { padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.12); }
+.best-practices-card .best-practice-row:last-child { border-bottom: none; }
+.best-practices-card .best-practice-row .bp-text { color: rgba(255,255,255,0.9); font-size: 14px; line-height: 1.55; }
+.best-practices-card .best-practice-row .bp-text strong { color: var(--inv-white); font-weight: 700; }
+
+/* Per-entity insight callout — distinct from rationale-quote */
+.entity-insight { background: #FFF5EC; border-left: 4px solid var(--inv-mandarin); border-radius: 6px; padding: 12px 16px; font-size: 14px; color: var(--inv-text); line-height: 1.55; display: flex; align-items: flex-start; gap: 10px; }
+.entity-insight::before { content: '★'; color: var(--inv-mandarin); font-size: 16px; font-weight: 700; flex-shrink: 0; line-height: 1.4; }
+.entity-insight .entity-insight-label { font-size: 10px; font-weight: 700; color: var(--inv-text-sec); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 2px; }
+
+/* Dimension appendix */
+.dim-appendix { margin-top: 24px; background: var(--inv-white); border: 1px solid var(--inv-stroke); border-radius: 8px; padding: 6px 20px; }
+.dim-appendix > summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--inv-text-sec); padding: 12px 0; text-transform: uppercase; letter-spacing: 0.4px; }
+.dim-appendix > summary:hover { color: var(--inv-orange); }
+.dim-appendix[open] > summary { border-bottom: 1px solid var(--inv-stroke); margin-bottom: 16px; }
+.dim-appendix .stat-grid { margin-bottom: 12px; margin-top: 4px; }
+
 /* Recommendation cards */
 .rec-card { background: var(--inv-white); border-radius: 8px; padding: 20px 24px; border: 1px solid var(--inv-stroke); margin-bottom: 14px; border-left: 4px solid var(--inv-orange); }
 .rec-title { font-size: 15px; font-weight: 700; color: var(--inv-text); margin-bottom: 6px; }
@@ -263,10 +291,73 @@ body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Aria
   <a href="#no-pattern">No-pattern list</a>
 </div>
 
+<%
+  // Template-scoped helpers (T02). Inline so the change stays local to the
+  // template without touching build-report.js's variable contract.
+  // Sentence-case helper. The brief calls this "Title Case" but the worked
+  // examples ("Imagery type", "Abstract graphic") are sentence case — only the
+  // first character capitalized, the rest lowercase, with underscores becoming
+  // spaces. This matches how human readers write dimension labels in copy.
+  function titleCase(s) {
+    if (s == null) return '';
+    const cleaned = String(s)
+      .replace(/[_-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+    if (!cleaned) return '';
+    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  }
+  // Snake/lower-case enum strings get title-cased for display. Sentences (with
+  // spaces or punctuation other than underscores) pass through untouched so we
+  // don't over-capitalize free text like "vibrant gradient — orange, pink".
+  function displayDimValue(v) {
+    if (v == null) return '';
+    const s = String(v);
+    if (/^[a-z][a-z0-9_]*$/.test(s) || /^[a-z][a-z0-9_-]*$/.test(s)) return titleCase(s);
+    return s;
+  }
+  // Index entities by id and by lowercased label so gallery resolvers can
+  // accept either form (pattern.examples may carry either).
+  const entityById = {};
+  const entityByLabel = {};
+  (entities || []).forEach(function (e) {
+    if (e && e.id) entityById[e.id] = e;
+    if (e && e.label) entityByLabel[String(e.label).toLowerCase()] = e;
+  });
+  function resolveEntity(ref) {
+    if (!ref) return null;
+    if (typeof ref === 'object') {
+      if (ref.id && entityById[ref.id]) return entityById[ref.id];
+      if (ref.label && entityByLabel[String(ref.label).toLowerCase()]) return entityByLabel[String(ref.label).toLowerCase()];
+      return null;
+    }
+    const key = String(ref);
+    if (entityById[key]) return entityById[key];
+    const lower = key.toLowerCase();
+    if (entityByLabel[lower]) return entityByLabel[lower];
+    return null;
+  }
+  function resolveEntityList(list, max) {
+    if (!Array.isArray(list)) return [];
+    const out = [];
+    const seen = new Set();
+    for (let i = 0; i < list.length && out.length < (max || 3); i++) {
+      const ent = resolveEntity(list[i]);
+      if (!ent) continue;
+      if (!ent.screenshot && !ent.screenshotFull) continue;
+      if (seen.has(ent.id)) continue;
+      seen.add(ent.id);
+      out.push(ent);
+    }
+    return out;
+  }
+%>
+
 <!-- ========== EXECUTIVE SUMMARY ========== -->
 <div class="section" id="exec-summary">
   <h2>Executive summary</h2>
-  <p class="section-sub">Headline numbers and the three-to-five observations that answer the research question.</p>
+  <p class="section-sub">Best practices and quantified patterns that answer the research question.</p>
 
   <% if (brief.framework_lens) {
        const lensLabels = { jtbd: 'Jobs-to-be-Done', kano: 'Feature-value (Kano)', price_anchor: 'Price anchoring', descriptive: 'Descriptive' };
@@ -292,77 +383,31 @@ body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Aria
   </div>
   <% } %>
 
-  <% if (execStats && execStats.length) { %>
-  <div class="stat-grid">
-    <% execStats.forEach(function(s) {
-         const label = s && (s.label || s.name);
-         const main  = s && s.main;
-         if (!label && !main) { return; /* skip empty stat box */ } %>
-      <div class="stat-box">
-        <% if (label) { %><div class="stat-label"><%= label %></div><% } %>
-        <% if (main)  { %><div class="stat-main"><%= main %></div><% } %>
-        <% if (s.sub) { %><div class="stat-sub"><%= s.sub %></div><% } %>
-      </div>
-    <% }) %>
-  </div>
-  <% } %>
-
   <% if (bestPractices && bestPractices.length) { %>
   <div class="exec-card best-practices-card">
     <h3>Best practices — what to include if you adopt this pattern</h3>
-    <ul>
-      <% bestPractices.forEach(function(b) {
-           const rule = b && (b.rule || b.title || b.practice);
-           if (!rule) { return; /* skip empty row */ } %>
-        <li><strong><%= rule %></strong><% if (b.detail) { %> — <%= b.detail %><% } %></li>
-      <% }) %>
-    </ul>
-  </div>
-  <% } %>
-
-  <% if ((patterns || []).length) { %>
-  <div class="charts-grid">
-    <div class="chart-card">
-      <h4>Pattern frequency across the set</h4>
-      <% patterns.slice(0, 6).forEach(function(p) { const pct = Math.max(2, Math.min(100, p.percent != null ? p.percent : 0)); %>
-        <div class="bar-row">
-          <div class="bar-label"><%= (p.title || p.name || 'pattern').slice(0, 32) %></div>
-          <div class="bar-track"><div class="bar-fill" style="width: <%= pct %>%"></div></div>
-          <div class="bar-value"><%= (p.percent != null) ? (p.percent + '%') : '' %></div>
-        </div>
-      <% }) %>
-    </div>
-
-    <% if (categoryCounts && categoryCounts.length) { %>
-    <div class="chart-card">
-      <h4>Distribution by category</h4>
-      <%
-        // Scale bars relative to the busiest category, not to the total entity count.
-        // With small per-category counts (e.g., 2 of 30), absolute scaling would clamp
-        // every bar to ~7% and make the chart unreadable. Relative scaling fills the
-        // track for the max category and shows proportional gaps for the rest.
-        const maxCatCount = Math.max.apply(null, categoryCounts.map(function(c){ return c.count || 0; }).concat([1]));
-      %>
-      <% categoryCounts.forEach(function(cc) { const pct = Math.max(6, Math.min(100, (cc.count / maxCatCount) * 100)); %>
-        <div class="bar-row">
-          <div class="bar-label"><%= cc.category %></div>
-          <div class="bar-track"><div class="bar-fill" style="width: <%= pct %>%"></div></div>
-          <div class="bar-value"><%= cc.count %></div>
-        </div>
-      <% }) %>
-    </div>
-    <% } %>
-  </div>
-  <% } %>
-
-  <% if (observations && observations.length) { %>
-  <div class="exec-card">
-    <h3>Top observations</h3>
-    <ul>
-      <% observations.forEach(function(o) { %>
-        <li><%- o %></li>
-      <% }) %>
-    </ul>
+    <% bestPractices.forEach(function(b) {
+         const rule = b && (b.rule || b.title || b.practice);
+         if (!rule) { return; /* skip empty row */ }
+         // Gallery source: gallery_entities[] (T01 schema). Falls back silently
+         // when the field is missing — older patterns.json renders without thumbs.
+         const galleryThumbs = resolveEntityList(b.gallery_entities || [], 3);
+    %>
+      <div class="best-practice-row">
+        <div class="bp-text"><strong><%= rule %></strong><% if (b.detail) { %> — <%= b.detail %><% } %></div>
+        <% if (galleryThumbs.length) { %>
+          <div class="evidence-gallery">
+            <% galleryThumbs.forEach(function(ent) { %>
+              <div class="evidence-gallery-thumb-wrap">
+                <img class="evidence-gallery-thumb" src="<%= ent.screenshotPreview || ent.screenshot %>" alt="<%= ent.label %> screenshot">
+                <button type="button" class="evidence-gallery-thumb-expand" data-full-src="<%= ent.screenshotFull || ent.screenshot %>" data-label="<%= ent.label %>" aria-label="Expand screenshot of <%= ent.label %>">⤢</button>
+                <div class="evidence-gallery-thumb-label"><%= ent.label %></div>
+              </div>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+    <% }) %>
   </div>
   <% } %>
 </div>
@@ -450,7 +495,12 @@ body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Aria
     </div>
   <% } %>
 
-  <% (patterns || []).forEach(function(p) { const pct = Math.max(2, Math.min(100, p.percent != null ? p.percent : 0)); %>
+  <% (patterns || []).forEach(function(p) {
+       const pct = Math.max(2, Math.min(100, p.percent != null ? p.percent : 0));
+       // Pattern gallery: resolve up to 3 thumbs from p.examples[]. Replaces
+       // the old example-chip strip — pick one canonical placement, not both.
+       const patternThumbs = resolveEntityList(p.examples || [], 3);
+  %>
     <div class="pattern-card">
       <h4><%= p.title || p.name || 'Pattern' %></h4>
       <% if (p.percent != null || p.count != null) { %>
@@ -463,10 +513,14 @@ body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Aria
         <% } %>
       <% } %>
       <% if (p.description || p.body) { %><div class="pattern-body"><%= p.description || p.body %></div><% } %>
-      <% if (p.examples && p.examples.length) { %>
-        <div class="example-chips">
-          <% p.examples.slice(0, 8).forEach(function(ex) { %>
-            <span class="example-chip"><%= ex %></span>
+      <% if (patternThumbs.length) { %>
+        <div class="evidence-gallery">
+          <% patternThumbs.forEach(function(ent) { %>
+            <div class="evidence-gallery-thumb-wrap">
+              <img class="evidence-gallery-thumb" src="<%= ent.screenshotPreview || ent.screenshot %>" alt="<%= ent.label %> screenshot">
+              <button type="button" class="evidence-gallery-thumb-expand" data-full-src="<%= ent.screenshotFull || ent.screenshot %>" data-label="<%= ent.label %>" aria-label="Expand screenshot of <%= ent.label %>">⤢</button>
+              <div class="evidence-gallery-thumb-label"><%= ent.label %></div>
+            </div>
           <% }) %>
         </div>
       <% } %>
@@ -476,15 +530,22 @@ body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Aria
     <p style="color:#888;">Patterns will appear here once analysis runs.</p>
   <% } %>
 
-  <% if (recommendations && recommendations.length) { %>
-    <h2 style="margin-top:32px;">Recommendations</h2>
-    <p class="section-sub">What to do with the patterns above.</p>
-    <% recommendations.forEach(function(r) { %>
-      <div class="rec-card">
-        <div class="rec-title"><%= r.title %></div>
-        <div class="rec-body"><%= r.body %></div>
-      </div>
-    <% }) %>
+  <% if (execStats && execStats.length) { %>
+  <details class="dim-appendix" id="dimension-appendix">
+    <summary>Browse all dimension counts</summary>
+    <div class="stat-grid">
+      <% execStats.forEach(function(s) {
+           const label = s && (s.label || s.name);
+           const main  = s && s.main;
+           if (!label && !main) { return; /* skip empty stat box */ } %>
+        <div class="stat-box">
+          <% if (label) { %><div class="stat-label"><%= label %></div><% } %>
+          <% if (main)  { %><div class="stat-main"><%= main %></div><% } %>
+          <% if (s.sub) { %><div class="stat-sub"><%= s.sub %></div><% } %>
+        </div>
+      <% }) %>
+    </div>
+  </details>
   <% } %>
 </div>
 
@@ -560,10 +621,20 @@ body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Aria
             <div class="rationale-quote"><%= e.rationale %></div>
           <% } %>
 
+          <% const perEntityInsight = e.analysis && e.analysis.per_entity_insight; %>
+          <% if (perEntityInsight) { %>
+            <div class="entity-insight">
+              <div>
+                <span class="entity-insight-label">What <%= e.label %> is doing differently</span>
+                <%= perEntityInsight %>
+              </div>
+            </div>
+          <% } %>
+
           <% const dimRows = (dimensions || []).map(function(d) {
                 const v = e.analysis && e.analysis[d];
                 if (v == null || v === '' || v === '—') return null;
-                const rendered = (typeof v === 'object') ? JSON.stringify(v, null, 2) : String(v);
+                const rendered = (typeof v === 'object') ? JSON.stringify(v, null, 2) : displayDimValue(v);
                 return { key: d, val: rendered };
              }).filter(Boolean);
              const notes = e.analysis && e.analysis.notes;
@@ -571,10 +642,10 @@ body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Aria
           <% if (dimRows.length || notes) { %>
             <table class="dim-table">
               <% dimRows.forEach(function(r) { %>
-                <tr><td class="dim-key"><%= r.key.replace(/_/g, ' ') %></td><td class="dim-val"><%= r.val %></td></tr>
+                <tr><td class="dim-key"><%= titleCase(r.key) %></td><td class="dim-val"><%= r.val %></td></tr>
               <% }) %>
               <% if (notes) { %>
-                <tr><td class="dim-key">notes</td><td class="dim-val"><%= notes %></td></tr>
+                <tr><td class="dim-key">Notes</td><td class="dim-val"><%= notes %></td></tr>
               <% } %>
             </table>
           <% } %>
@@ -770,9 +841,11 @@ body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Aria
     lastTrigger = null;
   }
 
-  // Delegated click handler — the ⤢ button is the only thing that opens.
+  // Delegated click handler — accepts the existing per-entity ⤢ button AND
+  // the new evidence-gallery ⤢ button (best-practice + pattern thumbnails).
+  // Both share the data-full-src + data-label contract.
   document.addEventListener('click', function (e) {
-    var btn = e.target.closest('.entity-thumb-expand');
+    var btn = e.target.closest('.entity-thumb-expand, .evidence-gallery-thumb-expand');
     if (btn) {
       e.preventDefault();
       e.stopPropagation();

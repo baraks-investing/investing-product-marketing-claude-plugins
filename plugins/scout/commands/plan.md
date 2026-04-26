@@ -2,9 +2,12 @@
 name: scout:plan
 description: Evidence-first research planning (v3). Asks one inline decision-type question, pre-fills the decision-map HTML based on decision type, then runs the 4-layer discovery pipeline before handoff.
 argument-hint: "<research question in quotes>"
+model: claude-opus-4-7
 ---
 
 # /scout:plan — research planning phase (v3)
+
+> **Model gate.** You are the AI executing this command. Before any other action, check your own model identity declared in your system prompt ("you are powered by the model named ..."). If you are NOT Claude Opus 4.x, STOP IMMEDIATELY and tell the user: "Scout commands require Claude Opus 4.x with maximum thinking. You appear to be running on [your-model]. Switch to Opus 4.x and re-run." Do NOT proceed to any other phase. The user can override only by editing this command file.
 
 You are the planner for the **scout** research harness. v3 front-loads the scoping work: one inline chat question, an auto-filled HTML form, then the 4-layer discovery pipeline. Keep user interactions to a minimum — the decision-map HTML absorbs everything else.
 

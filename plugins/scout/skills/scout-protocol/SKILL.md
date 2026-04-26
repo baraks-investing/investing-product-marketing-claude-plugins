@@ -75,6 +75,10 @@ The parser rejects a paste-back whose project_id doesn't match the current state
 Primary: Agent tool with explicit `model` override. Confirmed working in Claude Code as of 2026-04.
 Fallback (documented in agents/second-opinion.md, not wired): write critique-prompt.md and surface the HTML's second paste-box. Flip to fallback only if the model override stops working.
 
+## Analysis schema additions
+
+Two additive fields are produced during `/scout:execute` and consumed by the report renderer. Both are additive — older runs without them must still parse cleanly, and the renderer skips silently when either is missing. (1) Every entity in `analysis/entity-data.json` carries a top-level `per_entity_insight` string — one sentence on what makes that entity stand out vs the cohort, emitted by the per-entity analyzer (`agents/generator.md`). It must not paraphrase the rationale quote and is omitted for entities marked `capture_failed`. (2) Every item in `analysis/patterns.json`'s `bestPractices[]` may carry an optional `gallery_entities[]` array of 1–3 entity ids picked by the cross-entity aggregator for visual representativeness of the rule; ids in `gallery_entities` must be a subset of that practice's `evidence_entities[]`. Older fields (`recommendations`, `top_level_observations`, `observations`) remain in the schema and continue to be emitted; only their rendering changes downstream.
+
 ## Output style for commands
 
 All user-facing messages from scout commands follow the human-writing rules:

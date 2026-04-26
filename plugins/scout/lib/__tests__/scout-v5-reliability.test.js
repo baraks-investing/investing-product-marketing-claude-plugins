@@ -26,6 +26,7 @@ const path = require('path');
 const { normalizePatterns, cropToTop } = require('../build-report');
 const { filterUrlsByResume, newPageWithCdpRetry } = require('../capture');
 const parsePasteBack = require('../parse-paste-back');
+const prereq = require('../prereq-check');
 
 let failures = 0;
 function test(name, fn) {
@@ -357,6 +358,56 @@ function tmpDir(tag) {
       'inferred framework lens: ' + briefJson.framework_lens);
     assert.strictEqual(briefJson.battlecard_enabled, false,
       'battlecard_enabled false for marketing_design: ' + briefJson.battlecard_enabled);
+  });
+
+  // ---------- prereq-check ----------
+
+  await test('prereq-check — happy path on dev folder reports ok', () => {
+    // The dev folder has node_modules already from the user's manual install.
+    const result = prereq.checkPrereqs();
+    assert.strictEqual(result.ok, true, 'expected ok=true, got: ' + JSON.stringify(result));
+    assert.deepStrictEqual(result.missing, [], 'no missing deps');
+    assert.strictEqual(typeof result.nodeVersion, 'string');
+    assert.strictEqual(result.cacheWritable, true);
+    assert.ok(result.pluginRoot, 'pluginRoot populated');
+  });
+
+  await test('prereq-check — exposes constants matching package.json shape', () => {
+    assert.ok(Array.isArray(prereq.REQUIRED_DEPS) && prereq.REQUIRED_DEPS.length === 3,
+      'REQUIRED_DEPS shape: ' + JSON.stringify(prereq.REQUIRED_DEPS));
+    assert.ok(prereq.REQUIRED_DEPS.indexOf('puppeteer') >= 0);
+    assert.ok(prereq.REQUIRED_DEPS.indexOf('ejs') >= 0);
+    assert.ok(prereq.REQUIRED_DEPS.indexOf('sharp') >= 0);
+    assert.strictEqual(prereq.MIN_NODE_MAJOR, 18);
+  });
+
+  await test('prereq-check — script parses on legacy Node syntax (no modern syntax errors)', () => {
+    // Read the file and confirm no ES6+ tokens leaked in. This test guards
+    // against accidental arrow functions / const / template literals being
+    // added later — the script must parse on Node 14 to report "your Node is
+    // too old" correctly.
+    const src = fs.readFileSync(path.join(__dirname, '..', 'prereq-check.js'), 'utf8');
+    // Strip strings and comments so we don't false-positive on `=>` inside a
+    // string literal (none present, but defensive).
+    const stripped = src
+      .replace(/\/\*[\s\S]*?\*\//g, '') // block comments
+      .replace(/\/\/[^\n]*/g, '')        // line comments
+      .replace(/'(?:\\'|[^'])*'/g, "''") // single-quoted strings
+      .replace(/"(?:\\"|[^"])*"/g, '""'); // double-quoted strings
+    assert.ok(!/=>/.test(stripped), 'no arrow functions');
+    assert.ok(!/`[^`]*`/.test(stripped), 'no template literals');
+    assert.ok(!/\bconst\s/.test(stripped), 'no const keyword');
+    assert.ok(!/\blet\s/.test(stripped), 'no let keyword');
+  });
+
+  await test('prereq-check — CLI mode returns exit code 0 on healthy folder', () => {
+    const cp = require('child_process');
+    const result = cp.spawnSync(process.execPath, [path.join(__dirname, '..', 'prereq-check.js')], {
+      encoding: 'utf8',
+    });
+    assert.strictEqual(result.status, 0, 'exit code: ' + result.status + ' stderr: ' + result.stderr);
+    const parsed = JSON.parse(result.stdout);
+    assert.strictEqual(parsed.ok, true);
   });
 
   // ---------- filterUrlsByResume ----------

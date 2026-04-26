@@ -10,11 +10,40 @@ You are the planner for the **scout** research harness. v3 front-loads the scopi
 
 Arguments: `$ARGUMENTS` contains the user's research question (may be empty — ask inline if so).
 
+## Phase -1 — Prerequisite check (auto-install if missing)
+
+Before anything else, verify scout's runtime dependencies are installed in the plugin folder. The plugin uses puppeteer (web automation), ejs (HTML templating), and sharp (image processing). On a fresh install these are absent until the user — or scout itself — runs `npm install`.
+
+1. Use the Bash tool to run:
+   ```
+   node "${CLAUDE_PLUGIN_ROOT}/plugins/scout/lib/prereq-check.js"
+   ```
+   The script prints a single JSON object to stdout. Parse it.
+
+2. **If `ok === true`**: prerequisites are good. Skip to Phase 0.
+
+3. **If `ok === false`**: surface the situation to the user in plain language. Adapt to what's actually missing:
+
+   - If `errors.node` is set: tell the user "Scout needs Node.js 18 or newer — your version is too old (or missing). The fix: install a recent Node.js from https://nodejs.org, then come back and re-run /scout:plan." Then STOP — do NOT try to install anything else, since the install script also needs modern Node.
+   - If `cacheWritable === false`: surface `errors.write` verbatim (it already contains the actionable recovery hint). Then STOP.
+   - Otherwise (only `missing[]` is non-empty): say something like "Scout needs to install its dependencies first ({missing list}). This pulls Chromium for screenshots (~170MB) and takes about 5 minutes. Want me to install now?" Wait for the user to say yes / no / equivalent.
+
+4. **On consent (yes/y/go/etc.)**: use the Bash tool to run:
+   ```
+   node "${CLAUDE_PLUGIN_ROOT}/plugins/scout/lib/install-deps.js"
+   ```
+   The Bash tool will stream npm output to the chat as it runs — that's the user's progress indicator. The script handles the Apple Silicon sharp rebuild edge case automatically and re-runs prereq-check at the end.
+
+5. **After install**:
+   - If exit code 0: continue to Phase 0.
+   - If non-zero: surface the `[scout] Install failed.` message from stderr (it's already an actionable hint per `lib/install-deps.js`'s error translation). STOP — do not proceed with broken deps.
+
+6. **On user decline**: tell them "No problem. When you're ready, run /scout:install — it does the same thing on demand. Or paste the install steps to Claude manually." STOP — do NOT continue Phase 0.
+
 ## Phase 0 — Runtime check
 
 1. Ensure target project has `.agents/scout/` — create if missing.
-2. Ensure `puppeteer` and `ejs` are installed in the target project. If not, tell the user: `Scout needs puppeteer and ejs. Run npm i puppeteer ejs and re-run.` Stop.
-3. Identify the current session model (assume opus unless clearly not).
+2. Identify the current session model (assume opus unless clearly not).
 
 ## Phase 1 — Collect the research question and decision type
 

@@ -243,8 +243,11 @@ async function buildReport(config) {
 
       // Preview rules (T01):
       //   1. If vision crop missing → preview falls back to top-1200 of the original.
-      //   2. If vision crop ≤ 1200px tall → reuse it (dedup, saves ~30 KB per entity).
-      //   3. If vision crop > 1200px → produce a separate top-1200 crop at q=70.
+      //   2. If vision crop succeeded AND its bbox ≤ 1200px → reuse the crop URI
+      //      (dedup, saves ~30 KB per entity). The `croppedScreenshot &&` guard
+      //      ensures we only reuse when cropToPattern actually returned a URI;
+      //      a null return (e.g., bad sharp install) falls through to cropToTop.
+      //   3. Otherwise → produce a separate top-1200 crop at q=70.
       const visionH = Number.isFinite(verdict.pattern_y_height) ? verdict.pattern_y_height : null;
       if (croppedScreenshot && visionH != null && visionH <= 1200) {
         screenshotPreview = croppedScreenshot;

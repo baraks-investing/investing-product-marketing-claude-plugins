@@ -30,7 +30,22 @@
 body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; background: var(--inv-well); color: var(--inv-text); line-height: 1.55; -webkit-font-smoothing: antialiased; }
 
 /* Header — Investing.com anchor #181C21 with pumpkin orange accent */
-.page-header { background: var(--inv-anchor); color: var(--inv-white); padding: 48px 40px 40px; }
+.page-header { background: var(--inv-anchor); color: var(--inv-white); padding: 48px 40px 40px; position: relative; }
+/* ---- Share button (top-right of page header) ---- */
+.share-wrap { position: absolute; top: 20px; right: 28px; z-index: 50; }
+.share-btn { background: var(--inv-orange); color: var(--inv-white); border: 0; border-radius: 6px; padding: 8px 14px; font: 600 13px/1 "Inter", sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: background 0.15s; }
+.share-btn:hover { background: var(--inv-orange-hover); }
+.share-btn::before { content: '↗'; font-size: 14px; }
+.share-popover { display: none; position: absolute; top: 44px; right: 0; min-width: 280px; background: var(--inv-white); color: var(--inv-text); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.18); padding: 8px; }
+.share-popover.open { display: block; }
+.share-popover button, .share-popover a { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent; color: var(--inv-text); border: 0; padding: 10px 12px; font: 500 13px/1.3 "Inter", sans-serif; border-radius: 6px; cursor: pointer; text-decoration: none; }
+.share-popover button:hover, .share-popover a:hover { background: var(--inv-well); }
+.share-popover .share-row-icon { font-size: 16px; width: 18px; text-align: center; flex-shrink: 0; }
+.share-popover hr { border: 0; border-top: 1px solid var(--inv-stroke); margin: 6px 4px; }
+.share-popover .share-fallback-area { display: none; padding: 10px 12px; }
+.share-popover .share-fallback-area textarea { width: 100%; min-height: 120px; font: 12px/1.4 ui-monospace, monospace; padding: 8px; border: 1px solid var(--inv-stroke); border-radius: 4px; resize: vertical; }
+.share-toast { position: fixed; top: 20px; right: 24px; background: var(--inv-anchor); color: var(--inv-white); padding: 12px 18px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); font: 500 13px/1.3 "Inter", sans-serif; opacity: 0; transform: translateY(-8px); transition: opacity 0.2s, transform 0.2s; z-index: 100; pointer-events: none; max-width: 340px; }
+.share-toast.show { opacity: 1; transform: translateY(0); }
 .page-header h1 { font-size: 32px; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.01em; }
 .page-header h1::after { content: ''; display: inline-block; width: 10px; height: 10px; background: var(--inv-orange); border-radius: 50%; margin-left: 10px; vertical-align: middle; transform: translateY(-4px); }
 .page-header .subtitle { font-size: 16px; color: rgba(255,255,255,0.72); margin-bottom: 4px; }
@@ -222,7 +237,9 @@ body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Aria
 }
 @media (max-width: 768px) {
   .section { padding: 32px 20px; }
-  .page-header { padding: 32px 20px; }
+  .page-header { padding: 32px 20px 32px 20px; }
+  .share-wrap { top: 12px; right: 16px; }
+  .share-btn { padding: 6px 10px; font-size: 12px; }
   .nav-bar { padding: 0 20px; }
   .bar-label { min-width: 100px; font-size: 11px; }
 }
@@ -231,12 +248,35 @@ body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Aria
 <body>
 
 <div class="page-header">
+  <% if (typeof share !== 'undefined' && share && share.summary) { %>
+  <div class="share-wrap">
+    <button class="share-btn" id="share-btn" type="button" aria-haspopup="true" aria-expanded="false">Share</button>
+    <div class="share-popover" id="share-popover" role="menu">
+      <button type="button" data-share-action="copy" role="menuitem"><span class="share-row-icon">📋</span><span>Copy summary</span></button>
+      <button type="button" data-share-action="email" role="menuitem"><span class="share-row-icon">✉</span><span>Email</span></button>
+      <button type="button" data-share-action="slack" role="menuitem"><span class="share-row-icon">💬</span><span>Slack (copies, opens app)</span></button>
+      <% if (share.galleryImagePath) { %>
+      <hr>
+      <a href="<%= share.galleryImagePath %>" download role="menuitem"><span class="share-row-icon">🖼</span><span>Download gallery preview</span></a>
+      <% } %>
+      <div class="share-fallback-area" id="share-fallback-area">
+        <div style="font-size:11px;color:var(--inv-text-sec);margin-bottom:6px;">Clipboard blocked — select all and copy:</div>
+        <textarea readonly id="share-fallback-textarea"></textarea>
+      </div>
+    </div>
+  </div>
+  <% } %>
   <h1><%= reportTitle %></h1>
   <% const _rq = (brief.researchQuestion || '').trim(); const _titleNorm = (reportTitle || '').trim(); if (_rq && _rq !== _titleNorm) { %>
     <div class="subtitle"><%= _rq %></div>
   <% } %>
   <div class="meta">Scout deliverable · Generated <%= generatedAt %> · <%= entities.length %> verified entities · <%= stats.yesCount %> yes / <%= stats.partialCount %> partial · <%= failedCandidates.length %> on no-pattern list</div>
 </div>
+
+<% if (typeof share !== 'undefined' && share && share.summary) { %>
+<script type="application/json" id="scout-share-payload"><%- JSON.stringify({ title: share.title || '', summary: share.summary || '' }) %></script>
+<div class="share-toast" id="share-toast" role="status" aria-live="polite"></div>
+<% } %>
 
 <div class="nav-bar">
   <a href="#exec-summary" class="active">Executive summary</a>
@@ -708,6 +748,108 @@ body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Aria
   }
   window.addEventListener('scroll', onScroll, { passive: true });
   onScroll();
+})();
+
+// ---- Share button behavior ----
+// We embed the share text in a JSON <script> tag rather than a data-attribute
+// to avoid HTML-escape issues with multi-line text and to keep the payload
+// uncoupled from EJS quoting. JS reads JSON.parse(textContent) at runtime.
+(function shareInit() {
+  var payloadEl = document.getElementById('scout-share-payload');
+  var btn = document.getElementById('share-btn');
+  var popover = document.getElementById('share-popover');
+  var toastEl = document.getElementById('share-toast');
+  if (!payloadEl || !btn || !popover) return;
+
+  var payload;
+  try { payload = JSON.parse(payloadEl.textContent || '{}'); } catch (e) { payload = { title: '', summary: '' }; }
+
+  function showToast(text, ms) {
+    if (!toastEl) return;
+    toastEl.textContent = text;
+    toastEl.classList.add('show');
+    setTimeout(function () { toastEl.classList.remove('show'); }, ms || 2200);
+  }
+
+  function closePopover() {
+    popover.classList.remove('open');
+    btn.setAttribute('aria-expanded', 'false');
+    var fb = document.getElementById('share-fallback-area');
+    if (fb) fb.style.display = 'none';
+  }
+  function openPopover() {
+    popover.classList.add('open');
+    btn.setAttribute('aria-expanded', 'true');
+  }
+
+  btn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (popover.classList.contains('open')) closePopover(); else openPopover();
+  });
+  document.addEventListener('click', function (e) {
+    if (!popover.contains(e.target) && e.target !== btn) closePopover();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closePopover();
+  });
+
+  function copyToClipboard(text) {
+    // Modern path: navigator.clipboard.writeText. Fallback to the textarea
+    // method if the API is missing or rejects (some browsers block it for
+    // file:// origins).
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      return navigator.clipboard.writeText(text).then(function () { return true; }).catch(function () { return false; });
+    }
+    return Promise.resolve(false);
+  }
+
+  function showFallback() {
+    var fb = document.getElementById('share-fallback-area');
+    var ta = document.getElementById('share-fallback-textarea');
+    if (!fb || !ta) return;
+    ta.value = payload.summary || '';
+    fb.style.display = 'block';
+    ta.focus();
+    ta.select();
+  }
+
+  popover.addEventListener('click', function (e) {
+    var target = e.target.closest('[data-share-action]');
+    if (!target) return;
+    var action = target.getAttribute('data-share-action');
+    var summary = payload.summary || '';
+    var title = payload.title || 'Scout research report';
+
+    if (action === 'copy') {
+      copyToClipboard(summary).then(function (ok) {
+        if (ok) {
+          showToast('Copied — paste into Slack or email');
+          closePopover();
+        } else {
+          showFallback();
+        }
+      });
+    } else if (action === 'email') {
+      var url = 'mailto:?subject=' + encodeURIComponent(title) + '&body=' + encodeURIComponent(summary);
+      window.location.href = url;
+      closePopover();
+    } else if (action === 'slack') {
+      // Always copy first (clipboard succeeds independently of Slack desktop
+      // install), then attempt the deep link. We don't try to detect whether
+      // slack:// fired — blur/focus heuristics are unreliable on macOS Safari.
+      // Always show the same toast so the user knows the summary is ready.
+      copyToClipboard(summary).then(function (ok) {
+        try { window.location.href = 'slack://open'; } catch (_) {}
+        setTimeout(function () {
+          showToast(ok
+            ? 'Summary copied — paste into Slack (open it manually if it didn\'t launch)'
+            : 'Use the textarea to copy manually, then paste into Slack', 3500);
+          if (!ok) showFallback();
+        }, 1500);
+        closePopover();
+      });
+    }
+  });
 })();
 </script>
 </body>

@@ -182,6 +182,61 @@ function fileToDataUri(filePath) {
   return `data:${mime};base64,${buf.toString('base64')}`;
 }
 
+/**
+ * buildShareText — assemble a plain-text summary suitable for pasting into
+ * Slack or email. Includes a 4-line headline block, top 3-5 bullet findings,
+ * a one-line list of researched companies (capped at 30 in source order with
+ * "…" overflow marker), and a closing attachment hint.
+ *
+ * Returns the assembled string. Caller embeds it via JSON.stringify so the
+ * template's hidden script tag carries it untouched.
+ */
+function buildShareText(opts) {
+  const {
+    title,
+    researchQuestion,
+    totalEntities,
+    patternsCount,
+    bestPracticesCount,
+    topFindings = [],
+    companyNames = [],
+    attachmentNote = 'Full report (HTML) and gallery preview attached.',
+    companyCap = 30,
+  } = opts || {};
+
+  const lines = [];
+  lines.push(researchQuestion || title || 'Scout research report');
+  lines.push('');
+  const stats = [];
+  if (totalEntities != null) stats.push(`${totalEntities} entities analyzed`);
+  if (patternsCount != null) stats.push(`${patternsCount} patterns`);
+  if (bestPracticesCount != null) stats.push(`${bestPracticesCount} best practices`);
+  if (stats.length) lines.push(stats.join(' · '));
+
+  if (Array.isArray(topFindings) && topFindings.length) {
+    lines.push('');
+    lines.push('Key findings:');
+    topFindings.slice(0, 5).forEach((f) => {
+      const text = typeof f === 'string' ? f : (f && (f.title || f.label || f.description) ? (f.title || f.label || f.description) : '');
+      if (text) lines.push('• ' + text);
+    });
+  }
+
+  if (Array.isArray(companyNames) && companyNames.length) {
+    lines.push('');
+    const truncated = companyNames.length > companyCap;
+    const list = companyNames.slice(0, companyCap).join(', ');
+    lines.push('Researched: ' + list + (truncated ? ', …' : '.'));
+  }
+
+  if (attachmentNote) {
+    lines.push('');
+    lines.push(attachmentNote);
+  }
+
+  return lines.join('\n');
+}
+
 // Crop a full-page screenshot to the y-range the vision judge reported and
 // return a data URI of the cropped JPEG. If sharp isn't available, or the
 // crop coords are missing/invalid, returns null — the caller falls back to
@@ -407,7 +462,87 @@ async function buildReport(config) {
     return (lastSpace > 40 ? truncated.slice(0, lastSpace) : truncated).replace(/[.,;:\s]+$/, '') + '…';
   }
   const resolvedTitle = reportTitle || deriveShortTitle(brief.researchQuestion);
+
+  // ---- Share payload (T02/T04) ----
+  // Build the gallery composite BEFORE rendering so the template can reference
+  // the relative filename. Wrap in try/catch so any composer failure (sharp
+  // version mismatch, missing screenshots, disk error) degrades gracefully:
+  // share.galleryImagePath stays null and the template hides the Download row.
+  const out = outputPath || path.resolve(process.cwd(), 'research-report.html');
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+
+  const TRUST_RANK = { high: 3, medium: 2, low: 1 };
+  // Pick top 9 entities for the gallery: prefer verdict yes, sort by
+  // source_trust desc, then by id asc, deterministic given identical input.
+  const galleryTiles = entities
+    .filter((e) => e.screenshot && (e.verdict === 'yes' || e.verdict === 'partial' || !e.verdict))
+    .sort((a, b) => {
+      const at = TRUST_RANK[a.source_trust] || TRUST_RANK.low;
+      const bt = TRUST_RANK[b.source_trust] || TRUST_RANK.low;
+      if (bt !== at) return bt - at;
+      return String(a.id).localeCompare(String(b.id));
+    })
+    .slice(0, 9)
+    .map((e) => {
+      // Use the on-disk screenshot file (not the data URI) — composer needs a path.
+      const cap = (capMeta.results || []).find((r) => r.id === e.id);
+      const filePath = cap && cap.status === 'success' ? cap.file : null;
+      const verdict = (verdictsList || []).find((v) => v && v.id === e.id) || {};
+      const cropTop = Number.isFinite(verdict.pattern_y_start)
+        ? Math.max(0, Math.floor(verdict.pattern_y_start) - 60)
+        : null;
+      const cropHeight = Number.isFinite(verdict.pattern_y_height)
+        ? Math.min(800, Math.floor(verdict.pattern_y_height))
+        : null;
+      return { path: filePath, cropTop, cropHeight };
+    })
+    .filter((t) => t.path);
+
+  let galleryRelPath = null;
+  if (galleryTiles.length > 0) {
+    const baseNoExt = path.basename(out, path.extname(out));
+    const galleryAbsPath = path.join(path.dirname(out), baseNoExt + '-gallery.jpg');
+    try {
+      const { composeGallery } = require('./gallery-composer');
+      const result = await composeGallery({ tiles: galleryTiles, outputPath: galleryAbsPath });
+      galleryRelPath = path.basename(galleryAbsPath);
+      if (result.skipped && result.skipped.length) {
+        console.warn(`gallery-composer: ${result.usedPaths.length} used, ${result.skipped.length} skipped`);
+      }
+    } catch (err) {
+      console.warn('gallery-composer failed; share button will hide the gallery row:', err && err.message ? err.message : err);
+      galleryRelPath = null;
+    }
+  }
+
+  // Top findings = first 5 best-practice rules (tight, action-oriented) or
+  // fall back to the first 5 pattern titles. Plain strings for the share text.
+  const _bp = patternsDoc.bestPractices || [];
+  const _patternsTitles = (patternsDoc.patterns || []).map((p) => p.title).filter(Boolean);
+  const topFindings = (_bp.length ? _bp.map((b) => b.rule).filter(Boolean) : _patternsTitles).slice(0, 5);
+
+  const companyNames = (brief.entities || []).map((e) => e.label || e.id).filter(Boolean);
+  const shareSummary = buildShareText({
+    title: resolvedTitle,
+    researchQuestion: brief.researchQuestion,
+    totalEntities: entities.length,
+    patternsCount: (patternsDoc.patterns || []).length,
+    bestPracticesCount: (patternsDoc.bestPractices || []).length,
+    topFindings,
+    companyNames,
+    attachmentNote: galleryRelPath
+      ? 'Full report (HTML) and gallery preview attached.'
+      : 'Full report (HTML) attached.',
+  });
+  const share = {
+    title: resolvedTitle,
+    summary: shareSummary,
+    galleryImagePath: galleryRelPath,
+  };
+  // ---- End share payload ----
+
   const html = ejs.render(tpl, {
+    share,
     reportTitle: resolvedTitle,
     brief,
     entities,
@@ -439,8 +574,6 @@ async function buildReport(config) {
     rarityNote: brief.rarity_note || brief.rarityNote || '',
   }, { filename: templatePath });
 
-  const out = outputPath || path.resolve(process.cwd(), 'research-report.html');
-  fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, html, 'utf8');
 
   const stats = fs.statSync(out);
@@ -481,7 +614,7 @@ async function runCli() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { buildReport, normalizePatterns };
+module.exports = { buildReport, normalizePatterns, buildShareText };
 
 if (require.main === module) {
   runCli().catch((e) => { console.error(e); process.exit(1); });

@@ -23,8 +23,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { normalizePatterns } = require('../build-report');
+const { normalizePatterns, buildShareText } = require('../build-report');
 const { filterUrlsByResume, newPageWithCdpRetry } = require('../capture');
+const { composeGallery } = require('../gallery-composer');
 
 let failures = 0;
 function test(name, fn) {
@@ -234,6 +235,150 @@ function tmpDir(tag) {
     assert.strictEqual(out.recommendations[0].body, 'x', 'rationale alias: ' + out.recommendations[0].body);
     assert.strictEqual(out.recommendations[1].body, 'y');
     assert.strictEqual(out.recommendations[2].body, '', 'missing body normalized to empty string, got: ' + JSON.stringify(out.recommendations[2].body));
+  });
+
+  // ---------- gallery-composer + buildShareText (share-button feature) ----------
+
+  await test('buildShareText — full shape with company list under cap', () => {
+    const txt = buildShareText({
+      title: 'Hero images research',
+      researchQuestion: 'How do top SaaS companies design their hero sections?',
+      totalEntities: 30,
+      patternsCount: 8,
+      bestPracticesCount: 6,
+      topFindings: ['Lead with product UI', 'Skip device mockups', 'Static + one accent'],
+      companyNames: ['Stripe', 'Figma', 'Notion'],
+      attachmentNote: 'Full report attached.',
+    });
+    assert.ok(txt.includes('How do top SaaS companies'), 'researchQuestion present');
+    assert.ok(txt.includes('30 entities analyzed · 8 patterns · 6 best practices'), 'stats line: ' + txt);
+    assert.ok(txt.includes('• Lead with product UI'), 'finding bullet');
+    assert.ok(txt.includes('Researched: Stripe, Figma, Notion.'), 'company list with period: ' + txt);
+    assert.ok(txt.includes('Full report attached.'), 'attachment note');
+    assert.ok(!txt.includes('…'), 'no truncation marker for short list');
+  });
+
+  await test('buildShareText — long company list truncated at cap with ellipsis', () => {
+    const names = [];
+    for (let i = 1; i <= 35; i++) names.push('Company' + i);
+    const txt = buildShareText({
+      title: 't',
+      totalEntities: 35,
+      companyNames: names,
+      companyCap: 30,
+    });
+    // First 30 included, 31..35 excluded, ellipsis marker present
+    assert.ok(txt.includes('Company1,'), 'first company listed');
+    assert.ok(txt.includes('Company30,'), 'cap company listed');
+    assert.ok(!txt.includes('Company31'), 'over-cap company excluded: ' + txt);
+    assert.ok(txt.includes('…'), 'truncation marker: ' + txt);
+  });
+
+  await test('buildShareText — empty company list omits the Researched line', () => {
+    const txt = buildShareText({ title: 't', totalEntities: 0, companyNames: [] });
+    assert.ok(!txt.includes('Researched:'), 'no Researched line when list empty');
+  });
+
+  await test('composeGallery — produces JPEG given 3 generated tiles + 6 missing paths', async () => {
+    const sharp = require('sharp');
+    const dir = tmpDir('gallery');
+    // Generate 3 small test JPEGs (red, green, blue)
+    const colors = ['#FF0000', '#00FF00', '#0000FF'];
+    const paths = [];
+    for (let i = 0; i < 3; i++) {
+      const p = path.join(dir, 'tile' + i + '.jpg');
+      const buf = await sharp({
+        create: { width: 800, height: 1200, channels: 3, background: colors[i] },
+      }).jpeg({ quality: 80 }).toBuffer();
+      fs.writeFileSync(p, buf);
+      paths.push(p);
+    }
+    const tiles = paths.map((p) => ({ path: p }));
+    // Pad with 6 missing paths to fill 9 cells
+    for (let i = 0; i < 6; i++) tiles.push({ path: path.join(dir, 'missing' + i + '.jpg') });
+
+    const out = path.join(dir, 'composed.jpg');
+    const result = await composeGallery({ tiles, outputPath: out });
+
+    assert.strictEqual(result.outputPath, out);
+    assert.ok(result.bytes > 0 && result.bytes < 500 * 1024, 'output JPEG ~under 500KB: ' + result.bytes);
+    assert.deepStrictEqual(result.usedPaths.sort(), paths.slice().sort(), 'usedPaths matches the 3 valid');
+    assert.strictEqual(result.skipped.length, 6, 'six skipped: ' + JSON.stringify(result.skipped));
+    assert.ok(result.skipped.every((s) => s.reason === 'missing'), 'all skipped due to missing');
+
+    // Verify output dimensions match the canvas math
+    const meta = await sharp(out).metadata();
+    assert.strictEqual(meta.width, 3 * 400 + 2 * 12, 'canvas width');
+    assert.strictEqual(meta.height, 3 * 250 + 2 * 12, 'canvas height');
+    assert.strictEqual(meta.format, 'jpeg', 'format is JPEG');
+  });
+
+  await test('composeGallery — null cropTop/cropHeight uses default top-600 (regression for nullish coercion)', async () => {
+    const sharp = require('sharp');
+    const dir = tmpDir('gallery-null');
+    // Tall image: red on top 600, blue from 600 to 1200. With default
+    // top-600 crop, output should be red. If null is coerced to 1, output
+    // would degenerate to a one-pixel band (the bug we are guarding against).
+    const buf = await sharp({
+      create: { width: 800, height: 1200, channels: 3, background: '#FF0000' },
+    })
+      .composite([{
+        input: await sharp({ create: { width: 800, height: 600, channels: 3, background: '#0000FF' } }).png().toBuffer(),
+        top: 600, left: 0,
+      }])
+      .jpeg({ quality: 80 })
+      .toBuffer();
+    const tilePath = path.join(dir, 'two-band.jpg');
+    fs.writeFileSync(tilePath, buf);
+
+    const out = path.join(dir, 'null-out.jpg');
+    await composeGallery({
+      tiles: [{ path: tilePath, cropTop: null, cropHeight: null }],
+      outputPath: out,
+      cols: 1, rows: 1,
+    });
+
+    const { data, info } = await sharp(out).raw().toBuffer({ resolveWithObject: true });
+    const cx = Math.floor(info.width / 2);
+    const cy = Math.floor(info.height / 2);
+    const idx = (cy * info.width + cx) * info.channels;
+    const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+    assert.ok(r > b && r > g, 'top-600 default produced red-dominant output (not 1px stretched): r=' + r + ' g=' + g + ' b=' + b);
+  });
+
+  await test('composeGallery — honors per-tile cropTop / cropHeight', async () => {
+    const sharp = require('sharp');
+    const dir = tmpDir('gallery-crop');
+    // Generate a tall image with two color bands so we can verify which slice
+    // gets used: red on top half, blue on bottom half. Crop the bottom half
+    // and check the cell's average color leans blue.
+    const buf = await sharp({
+      create: { width: 800, height: 1200, channels: 3, background: '#FF0000' },
+    })
+      .composite([{
+        input: await sharp({ create: { width: 800, height: 600, channels: 3, background: '#0000FF' } }).png().toBuffer(),
+        top: 600, left: 0,
+      }])
+      .jpeg({ quality: 80 })
+      .toBuffer();
+    const tilePath = path.join(dir, 'two-band.jpg');
+    fs.writeFileSync(tilePath, buf);
+
+    const out = path.join(dir, 'crop-out.jpg');
+    await composeGallery({
+      tiles: [{ path: tilePath, cropTop: 600, cropHeight: 600 }], // bottom half (blue)
+      outputPath: out,
+      cols: 1, rows: 1,
+    });
+
+    // Read top-left pixel of output; should be blue-dominant.
+    const { data, info } = await sharp(out).raw().toBuffer({ resolveWithObject: true });
+    // Sample center pixel
+    const cx = Math.floor(info.width / 2);
+    const cy = Math.floor(info.height / 2);
+    const idx = (cy * info.width + cx) * info.channels;
+    const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+    assert.ok(b > r && b > g, 'center pixel blue-dominant: r=' + r + ' g=' + g + ' b=' + b);
   });
 
   await test('normalizePatterns — evidence_count percent is clamped to [0, 100]', () => {

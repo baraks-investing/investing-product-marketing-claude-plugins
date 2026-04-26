@@ -136,13 +136,113 @@ function tmpDir(tag) {
     assert.strictEqual(out.bestPractices[0].detail, 'ok');
   });
 
+  // ---------- normalizePatterns — variant keys (scout-plugin-bug-report fixes) ----------
+
+  await test('normalizePatterns — execStats {name, value, percent, note} variant', () => {
+    const input = {
+      execStats: [
+        { name: 'Product-UI hero', value: '16 / 30', percent: 53, note: 'The dominant pattern.' },
+        { name: 'No device chrome', value: '24 / 30', percent: 80 },
+        { name: 'Real humans', percent: 7 },
+      ],
+    };
+    const out = normalizePatterns(input);
+    assert.strictEqual(out.execStats[0].label, 'Product-UI hero');
+    assert.strictEqual(out.execStats[0].main, '16 / 30 · 53%');
+    assert.strictEqual(out.execStats[0].sub, 'The dominant pattern.');
+    assert.strictEqual(out.execStats[1].main, '24 / 30 · 80%');
+    assert.strictEqual(out.execStats[1].sub, undefined);
+    assert.strictEqual(out.execStats[2].main, '7%');
+  });
+
+  await test('normalizePatterns — bestPractices {practice, rationale} variant', () => {
+    const input = {
+      bestPractices: [
+        { practice: 'Lead with product UI', rationale: 'Removes the what-is-this friction.' },
+        { practice: 'Skip the device mockup', rationale: 'Floating UI is modern.', evidence_entities: ['stripe', 'attio'] },
+      ],
+    };
+    const out = normalizePatterns(input);
+    assert.strictEqual(out.bestPractices[0].rule, 'Lead with product UI');
+    assert.strictEqual(out.bestPractices[0].detail, 'Removes the what-is-this friction.');
+    assert.ok(out.bestPractices[1].detail.includes('Evidence: stripe, attio.'),
+      'evidence appended: ' + out.bestPractices[1].detail);
+  });
+
+  await test('normalizePatterns — patterns {evidence_count string, entities} variant', () => {
+    const input = {
+      patterns: [
+        {
+          title: 'Floating UI beats device mockups',
+          evidence_count: '24 / 30',
+          description: 'Only 2 of 30 show browser chrome.',
+          entities: ['stripe', 'slack', 'attio'],
+        },
+        {
+          title: 'Already numeric',
+          percent: 20,
+          count: 6,
+          denominator: 30,
+          description: 'no-op',
+          examples: [],
+        },
+      ],
+    };
+    const out = normalizePatterns(input);
+    assert.strictEqual(out.patterns[0].percent, 80);
+    assert.strictEqual(out.patterns[0].count, 24);
+    assert.strictEqual(out.patterns[0].denominator, 30);
+    assert.deepStrictEqual(out.patterns[0].examples, ['stripe', 'slack', 'attio']);
+    assert.strictEqual(out.patterns[1].percent, 20);
+    assert.strictEqual(out.patterns[1].count, 6);
+  });
+
+  await test('normalizePatterns — empty-string value does not emit dangling separator', () => {
+    const input = {
+      execStats: [
+        { label: 'Only percent', value: '', percent: 5 },
+        { label: 'Whitespace value', value: '   ', percent: 12 },
+      ],
+    };
+    const out = normalizePatterns(input);
+    assert.strictEqual(out.execStats[0].main, '5%', 'empty string value: ' + out.execStats[0].main);
+    assert.strictEqual(out.execStats[1].main, '12%', 'whitespace value: ' + out.execStats[1].main);
+  });
+
+  await test('normalizePatterns — recommendations without body fall back to empty string', () => {
+    const input = {
+      recommendations: [
+        { title: 'Has rationale', rationale: 'x' },
+        { title: 'Has body', body: 'y' },
+        { title: 'Has neither' },
+      ],
+    };
+    const out = normalizePatterns(input);
+    assert.strictEqual(out.recommendations[0].body, 'x');
+    assert.strictEqual(out.recommendations[1].body, 'y');
+    assert.strictEqual(out.recommendations[2].body, '', 'missing body normalized to empty string');
+  });
+
+  await test('normalizePatterns — evidence_count percent is clamped to [0, 100]', () => {
+    const input = {
+      patterns: [
+        { title: 'Over-100', evidence_count: '30 / 24', description: '' },
+        { title: 'Under-0 impossible but safe', evidence_count: '0 / 10', description: '' },
+      ],
+    };
+    const out = normalizePatterns(input);
+    assert.strictEqual(out.patterns[0].percent, 100, 'clamp >100');
+    assert.strictEqual(out.patterns[0].count, 30);
+    assert.strictEqual(out.patterns[0].denominator, 24);
+    assert.strictEqual(out.patterns[1].percent, 0);
+  });
+
   // ---------- cropToTop (entity-card thumbnail) ----------
 
   await test('cropToTop — caps tall image at top-1200 px', async () => {
     const sharp = require('sharp');
     const dir = tmpDir('croptop');
     const tilePath = path.join(dir, 'tall.jpg');
-    // 800 × 3000 image — taller than 1200 cap
     const buf = await sharp({
       create: { width: 800, height: 3000, channels: 3, background: '#FF0000' },
     }).jpeg({ quality: 80 }).toBuffer();
@@ -152,9 +252,7 @@ function tmpDir(tag) {
     assert.ok(typeof dataUri === 'string' && dataUri.startsWith('data:image/jpeg;base64,'),
       'returns data URI: ' + (dataUri && dataUri.slice(0, 40)));
 
-    // Decode and check dimensions
-    const b64 = dataUri.split(',', 2)[1];
-    const outBuf = Buffer.from(b64, 'base64');
+    const outBuf = Buffer.from(dataUri.split(',', 2)[1], 'base64');
     const meta = await sharp(outBuf).metadata();
     assert.strictEqual(meta.height, 1200, 'output height capped at 1200, got ' + meta.height);
     assert.strictEqual(meta.width, 800, 'output width preserved');
@@ -164,7 +262,6 @@ function tmpDir(tag) {
     const sharp = require('sharp');
     const dir = tmpDir('croptop-edge');
     const tilePath = path.join(dir, 'mid.jpg');
-    // 800 × 1500 — between 1200 and "very tall". Output must still cap at 1200.
     const buf = await sharp({
       create: { width: 800, height: 1500, channels: 3, background: '#0000FF' },
     }).jpeg({ quality: 80 }).toBuffer();
@@ -180,7 +277,6 @@ function tmpDir(tag) {
     const sharp = require('sharp');
     const dir = tmpDir('croptop-short');
     const tilePath = path.join(dir, 'short.jpg');
-    // 800 × 600 — shorter than the 1200 cap, output should be the full 600.
     const buf = await sharp({
       create: { width: 800, height: 600, channels: 3, background: '#00FF00' },
     }).jpeg({ quality: 80 }).toBuffer();
@@ -252,16 +348,13 @@ function tmpDir(tag) {
     assert.strictEqual(parsed.structured.decisionType, 'marketing_design',
       'decisionType preserved through parse: ' + parsed.structured.decisionType);
 
-    // writeBrief reads parsed.structured directly — pass parsed verbatim.
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'scout-mdesign-'));
     parsePasteBack.writeBrief(parsed, tmp);
     const briefJson = JSON.parse(fs.readFileSync(path.join(tmp, 'brief.json'), 'utf8'));
     assert.strictEqual(briefJson.decisionType, 'marketing_design',
       'brief.json decisionType matches: ' + briefJson.decisionType);
-    // Inferred lens for marketing_design = descriptive (per LENS_MAPPING update)
     assert.strictEqual(briefJson.framework_lens, 'descriptive',
       'inferred framework lens: ' + briefJson.framework_lens);
-    // marketing_design does NOT auto-enable battlecards
     assert.strictEqual(briefJson.battlecard_enabled, false,
       'battlecard_enabled false for marketing_design: ' + briefJson.battlecard_enabled);
   });

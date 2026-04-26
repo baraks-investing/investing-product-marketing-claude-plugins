@@ -142,6 +142,30 @@ function fileToDataUri(filePath) {
   return `data:${mime};base64,${buf.toString('base64')}`;
 }
 
+// Crop the top N pixels of a screenshot and return a data URI. Used for the
+// entity-card thumbnail preview — distinct from cropToPattern which uses the
+// vision-judge bbox. Always caps at maxHeight regardless of source height.
+// Returns null if sharp is unavailable or the file can't be read.
+async function cropToTop(fullPath, maxHeight, jpegQuality) {
+  if (!fullPath || !fs.existsSync(fullPath)) return null;
+  const sharp = getSharp();
+  if (!sharp) return null;
+  try {
+    const meta = await sharp(fullPath).metadata();
+    const imgH = meta.height || 0;
+    const imgW = meta.width || 0;
+    if (!imgH || !imgW) return null;
+    const height = Math.max(1, Math.min(imgH, maxHeight | 0 || 1200));
+    const buf = await sharp(fullPath)
+      .extract({ left: 0, top: 0, width: imgW, height })
+      .jpeg({ quality: jpegQuality | 0 || 70, mozjpeg: true })
+      .toBuffer();
+    return `data:image/jpeg;base64,${buf.toString('base64')}`;
+  } catch (_) {
+    return null;
+  }
+}
+
 // Crop a full-page screenshot to the y-range the vision judge reported and
 // return a data URI of the cropped JPEG. If sharp isn't available, or the
 // crop coords are missing/invalid, returns null — the caller falls back to
@@ -205,13 +229,28 @@ async function buildReport(config) {
     // section; fall back to the full screenshot when coords are missing.
     let screenshot = null;
     let croppedScreenshot = null;
+    let screenshotPreview = null;
+    let screenshotFull = null;
     if (screenshotFile) {
       croppedScreenshot = await cropToPattern(
         screenshotFile,
         verdict.pattern_y_start != null ? verdict.pattern_y_start : null,
         verdict.pattern_y_height != null ? verdict.pattern_y_height : null
       );
-      screenshot = croppedScreenshot || fileToDataUri(screenshotFile);
+      const fullUri = fileToDataUri(screenshotFile);
+      screenshot = croppedScreenshot || fullUri;
+      screenshotFull = fullUri;
+
+      // Preview rules (T01):
+      //   1. If vision crop missing → preview falls back to top-1200 of the original.
+      //   2. If vision crop ≤ 1200px tall → reuse it (dedup, saves ~30 KB per entity).
+      //   3. If vision crop > 1200px → produce a separate top-1200 crop at q=70.
+      const visionH = Number.isFinite(verdict.pattern_y_height) ? verdict.pattern_y_height : null;
+      if (croppedScreenshot && visionH != null && visionH <= 1200) {
+        screenshotPreview = croppedScreenshot;
+      } else {
+        screenshotPreview = await cropToTop(screenshotFile, 1200, 70) || fullUri;
+      }
     }
     const analysis = entityData[e.id] || entityData[e.label] || {};
     const category = e.category || 'uncategorized';
@@ -240,6 +279,8 @@ async function buildReport(config) {
       captureStatus: cap.status || (screenshot ? 'success' : 'unknown'),
       captureError: cap.error || null,
       screenshot,
+      screenshotPreview,
+      screenshotFull,
       analysis,
       verdict: verdict.verdict || null,
       rationale: verdict.rationale || null,
@@ -441,7 +482,7 @@ async function runCli() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { buildReport, normalizePatterns };
+module.exports = { buildReport, normalizePatterns, cropToTop };
 
 if (require.main === module) {
   runCli().catch((e) => { console.error(e); process.exit(1); });

@@ -36,7 +36,8 @@ Ask:
 > 5. UX pattern research
 > 6. Go-to-market / channel mix
 > 7. Sales battlecard creation
-> 8. Other (tell me)
+> 8. Marketing design / creative analysis
+> 9. Other (tell me)
 
 Wait for answer. Map to the enum:
 - 1 → `positioning`
@@ -46,7 +47,8 @@ Wait for answer. Map to the enum:
 - 5 → `ux_pattern`
 - 6 → `gtm`
 - 7 → `battlecard`
-- 8 → `other`
+- 8 → `marketing_design`
+- 9 → `other`
 
 If the user answered with a description instead of a number, infer the enum value from the wording. If ambiguous, make a best-effort call — `other` is always a safe fallback.
 

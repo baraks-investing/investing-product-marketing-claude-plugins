@@ -118,7 +118,7 @@ const V2_REQUIRED_BLOCKS = [
 
 const VALID_DECISION_TYPES = new Set([
   'positioning', 'pricing', 'feature_roadmap', 'launch_messaging',
-  'ux_pattern', 'gtm', 'battlecard', 'other',
+  'ux_pattern', 'gtm', 'battlecard', 'marketing_design', 'other',
 ]);
 
 // v4: framework lens + battlecard override vocabularies.
@@ -136,6 +136,7 @@ const LENS_MAPPING = {
   ux_pattern: 'descriptive',
   gtm: 'descriptive',
   battlecard: 'descriptive',
+  marketing_design: 'descriptive',
   other: 'descriptive',
 };
 
@@ -148,6 +149,7 @@ const BATTLECARD_MAPPING = {
   battlecard: true,
   ux_pattern: false,
   feature_roadmap: false,
+  marketing_design: false,
   other: false,
 };
 

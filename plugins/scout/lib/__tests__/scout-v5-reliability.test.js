@@ -23,8 +23,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { normalizePatterns } = require('../build-report');
+const { normalizePatterns, cropToTop } = require('../build-report');
 const { filterUrlsByResume, newPageWithCdpRetry } = require('../capture');
+const parsePasteBack = require('../parse-paste-back');
 
 let failures = 0;
 function test(name, fn) {
@@ -133,6 +134,136 @@ function tmpDir(tag) {
     assert.strictEqual(out.execStats[0].sub, 'analyzed');
     assert.strictEqual(out.bestPractices[0].rule, 'Already template');
     assert.strictEqual(out.bestPractices[0].detail, 'ok');
+  });
+
+  // ---------- cropToTop (entity-card thumbnail) ----------
+
+  await test('cropToTop — caps tall image at top-1200 px', async () => {
+    const sharp = require('sharp');
+    const dir = tmpDir('croptop');
+    const tilePath = path.join(dir, 'tall.jpg');
+    // 800 × 3000 image — taller than 1200 cap
+    const buf = await sharp({
+      create: { width: 800, height: 3000, channels: 3, background: '#FF0000' },
+    }).jpeg({ quality: 80 }).toBuffer();
+    fs.writeFileSync(tilePath, buf);
+
+    const dataUri = await cropToTop(tilePath, 1200, 70);
+    assert.ok(typeof dataUri === 'string' && dataUri.startsWith('data:image/jpeg;base64,'),
+      'returns data URI: ' + (dataUri && dataUri.slice(0, 40)));
+
+    // Decode and check dimensions
+    const b64 = dataUri.split(',', 2)[1];
+    const outBuf = Buffer.from(b64, 'base64');
+    const meta = await sharp(outBuf).metadata();
+    assert.strictEqual(meta.height, 1200, 'output height capped at 1200, got ' + meta.height);
+    assert.strictEqual(meta.width, 800, 'output width preserved');
+  });
+
+  await test('cropToTop — edge case: 1500px source caps at 1200, NOT 1500 (Codex-flagged)', async () => {
+    const sharp = require('sharp');
+    const dir = tmpDir('croptop-edge');
+    const tilePath = path.join(dir, 'mid.jpg');
+    // 800 × 1500 — between 1200 and "very tall". Output must still cap at 1200.
+    const buf = await sharp({
+      create: { width: 800, height: 1500, channels: 3, background: '#0000FF' },
+    }).jpeg({ quality: 80 }).toBuffer();
+    fs.writeFileSync(tilePath, buf);
+
+    const dataUri = await cropToTop(tilePath, 1200, 70);
+    const outBuf = Buffer.from(dataUri.split(',', 2)[1], 'base64');
+    const meta = await sharp(outBuf).metadata();
+    assert.strictEqual(meta.height, 1200, '1500px source → output must be 1200px not 1500px, got ' + meta.height);
+  });
+
+  await test('cropToTop — short image (under cap) uses full height', async () => {
+    const sharp = require('sharp');
+    const dir = tmpDir('croptop-short');
+    const tilePath = path.join(dir, 'short.jpg');
+    // 800 × 600 — shorter than the 1200 cap, output should be the full 600.
+    const buf = await sharp({
+      create: { width: 800, height: 600, channels: 3, background: '#00FF00' },
+    }).jpeg({ quality: 80 }).toBuffer();
+    fs.writeFileSync(tilePath, buf);
+
+    const dataUri = await cropToTop(tilePath, 1200, 70);
+    const outBuf = Buffer.from(dataUri.split(',', 2)[1], 'base64');
+    const meta = await sharp(outBuf).metadata();
+    assert.strictEqual(meta.height, 600, 'short source returns its full height: ' + meta.height);
+  });
+
+  // ---------- parse-paste-back: marketing_design enum ----------
+
+  await test('parse-paste-back — accepts marketing_design as valid decision_type', () => {
+    const minimalPaste = [
+      '=== SCOUT DECISION MAP v2 ===',
+      'project_id: sc_test_001',
+      'schema: v2',
+      'generated_at: 2026-04-26T00:00:00Z',
+      '',
+      '--- Research question ---',
+      'value: Test research question',
+      '',
+      '--- Decision type ---',
+      'value: marketing_design',
+      '',
+      '--- Inclusion criteria ---',
+      'selected: []',
+      'custom_added: []',
+      '',
+      '--- Exclusion criteria ---',
+      'selected: []',
+      'custom_added: []',
+      '',
+      '--- Dimensions ---',
+      'selected: []',
+      'custom_added: []',
+      '',
+      '--- Visual evidence ---',
+      'selected: [desktop]',
+      '',
+      '--- Target entity count ---',
+      'value: 20',
+      '',
+      '--- Minimum verified ---',
+      'value: 15',
+      '',
+      '--- Mockup count ---',
+      'value: 3-5',
+      '',
+      '--- Second-opinion model ---',
+      'value: sonnet',
+      '',
+      '--- Reference screenshot ---',
+      'value: (none)',
+      '',
+      '--- Notes ---',
+      'value:',
+      '',
+      '--- Approved candidates ---',
+      '',
+      '--- Custom candidates ---',
+      '(none)',
+      '',
+      '=== END SCOUT DECISION MAP v2 ===',
+    ].join('\n');
+
+    const parsed = parsePasteBack.parse(minimalPaste);
+    assert.strictEqual(parsed.structured.decisionType, 'marketing_design',
+      'decisionType preserved through parse: ' + parsed.structured.decisionType);
+
+    // writeBrief reads parsed.structured directly — pass parsed verbatim.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'scout-mdesign-'));
+    parsePasteBack.writeBrief(parsed, tmp);
+    const briefJson = JSON.parse(fs.readFileSync(path.join(tmp, 'brief.json'), 'utf8'));
+    assert.strictEqual(briefJson.decisionType, 'marketing_design',
+      'brief.json decisionType matches: ' + briefJson.decisionType);
+    // Inferred lens for marketing_design = descriptive (per LENS_MAPPING update)
+    assert.strictEqual(briefJson.framework_lens, 'descriptive',
+      'inferred framework lens: ' + briefJson.framework_lens);
+    // marketing_design does NOT auto-enable battlecards
+    assert.strictEqual(briefJson.battlecard_enabled, false,
+      'battlecard_enabled false for marketing_design: ' + briefJson.battlecard_enabled);
   });
 
   // ---------- filterUrlsByResume ----------
